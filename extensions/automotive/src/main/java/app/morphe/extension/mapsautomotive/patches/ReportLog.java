@@ -31,7 +31,7 @@ import java.util.concurrent.Executors;
  */
 final class ReportLog {
     /** The tags of the extension's classes, which call this class instead of android.util.Log. */
-    static final String[] TAGS = {"MorpheApiCompat", "MorpheArrivalBattery", "MorpheBuildings3d", "MorpheBydAudio",
+    static final String[] TAGS = {"NatArrivalUi", "MorpheApiCompat", "MorpheArrivalBattery", "MorpheBuildings3d", "MorpheBydAudio",
             "MorpheBydBattery", "MorpheBydBands", "MorpheBydDrive", "MorpheBydModel", "MorpheColorScheme", "MorpheDriverSide", "MorpheFloatingMaps",
             "MorpheGmsCore", "MorpheGpsInterval", "MorpheHomeWork", "MorpheLanguage", "MorpheLocationLockout", "MorpheLocationService", "MorpheNavigationSpeech", "MorphePhoneBattery", "MorpheReport", "MorpheSafeMode",
             "MorpheSendToCar", "MorpheTtsWarmup", "MorpheUiDensity", "MorpheUpdate", "MorpheWatchdog", "MorpheWindow"};

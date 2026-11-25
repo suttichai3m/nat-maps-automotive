@@ -417,6 +417,7 @@ public final class BydBatteryPatch {
             long wall = System.currentTimeMillis(), now = SystemClock.elapsedRealtime();
             boolean fresh = lastSampleAt != 0 && now - lastSampleAt <= FRESH_MS;
             int batteryWh = fresh ? sampleEnergyWh : -1;
+            NatPrediction.capture(forecast, fresh ? sampleSoc : Double.NaN, fresh ? sampleCapacityWh : -1);
             if (!forecast.isEmpty()) forecastSeen = true;
             // The start-up reset is recorded below but does not close a drive restored after a restart.
             if (forecastSeen) {
@@ -1565,6 +1566,10 @@ public final class BydBatteryPatch {
             content.setPadding(0, px(4), 0, px(8));
             root = new ScrollView(themed);
             root.addView(content);
+            android.widget.Button natPrediction = new android.widget.Button(themed);
+            natPrediction.setText("NAT Smart EV Prediction");
+            natPrediction.setOnClickListener(v -> NatPrediction.show(host));
+            content.addView(natPrediction);
 
             // On/off. The whole row is the touch target; the switch shows the stored choice, which
             // changes only after the restart is confirmed.
