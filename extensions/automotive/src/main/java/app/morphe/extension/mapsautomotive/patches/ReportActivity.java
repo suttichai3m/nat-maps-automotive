@@ -1,0 +1,113 @@
+package app.morphe.extension.mapsautomotive.patches;
+
+import android.app.ActionBar;
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import android.graphics.drawable.ColorDrawable;
+import android.os.Bundle;
+import android.view.MenuItem;
+
+/**
+ * The problem report's own screen: "Report" and the app's name in the launcher, also opened from the row in
+ * Maps' Settings and from the crash and safe-mode notifications. It runs in its own process
+ * (":morphe_report"), where the patch skips Maps' start, so it opens even when Maps crashes while
+ * starting or in Settings. It shows {@link ReportPatch}'s GitHub link, update status, report list and feature
+ * switches, with the patch and Google Maps versions under its title; the update notification opens it with
+ * {@link UpdateCheck}'s dialog.
+ */
+@SuppressWarnings("unused")
+public final class ReportActivity extends Activity {
+    private Runnable refresh;
+    /** The language this screen was built in (AppLanguage), checked again when it comes back to the front. */
+    private String language;
+
+    static void open(Context context) {
+        try {
+            context.startActivity(new Intent(context, ReportActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        } catch (RuntimeException error) {
+            ReportLog.w(ReportPatch.TAG, "report screen not opened", error);
+        }
+    }
+
+    @Override
+    protected void attachBaseContext(Context base) {
+        // No feature runs in this process, so nothing wrapped its Application: the language chosen in Settings for this screen.
+        super.attachBaseContext(AppLanguage.wrapReportScreen(base));
+        language = AppLanguage.reportScreenLanguage();
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        // The manifest gives no theme, so the window would take Maps' application theme. Dark or light with the M3 colors
+        // (in this process the system's night flag), on the M3 surface, so the screen's views can be read.
+        M3.Colors colors = M3.colors(this);
+        setTheme(colors.night ? android.R.style.Theme_DeviceDefault : android.R.style.Theme_DeviceDefault_Light);
+        super.onCreate(savedInstanceState);
+        getWindow().setBackgroundDrawable(new ColorDrawable(colors.surface));
+        boolean thai = UiDensityPatch.isThai(this);
+        String name = ReportPatch.reportName(this);
+        setTitle(thai || name == null ? ReportPatch.getSettingsTitle(this) : name);
+        ActionBar bar = getActionBar();
+        if (bar != null) {
+            bar.setDisplayHomeAsUpEnabled(true);
+            // The versions an issue asks for, always in view.
+            bar.setSubtitle(ReportPatch.versions(this, thai));
+        }
+        ReportUploader.start(getApplicationContext());
+        refresh = ReportPatch.attachScreen(this);
+        // The update notification opens this screen with the update dialog over it; Recents replays that intent, so not then.
+        Intent intent = getIntent();
+        if (savedInstanceState == null && UpdateCheck.ACTION_SHOW.equals(intent.getAction())
+                && (intent.getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0) {
+            UpdateCheck.show(this, null);
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        // The screen is single-task: the notification reaches an open one here.
+        setIntent(intent);
+        if (UpdateCheck.ACTION_SHOW.equals(intent.getAction())) UpdateCheck.show(this, null);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        // A language chosen in Maps' Settings while this single-task screen stayed open: built again in it once the
+        // screen itself has the focus, so not under a dialog (a report with a typed comment, the update dialog), and
+        // not while a switch change waits for its restart. Also after BYD's split screen, where it may stay resumed.
+        if (hasFocus && !ReportPatch.switchesChanged() && AppLanguage.reportScreenChanged(this, language)) recreate();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // The screen and a report ID dialog over it, which missed the changes while paused.
+        Runnable listener = ReportPatch.onUploadChange(refresh);
+        listener.run();
+        ReportUploader.setListener(listener);
+    }
+
+    @Override
+    protected void onPause() {
+        ReportUploader.setListener(null);
+        super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        ReportPatch.detachScreen(this);
+        super.onDestroy();
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
+            finish();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+}

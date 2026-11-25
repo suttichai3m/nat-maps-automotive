@@ -1,0 +1,46 @@
+name: Problem
+description: Something does not work in the patched Maps
+body:
+  - type: input
+    id: report-id
+    attributes:
+      label: Report ID
+      description: Shown after you send a report from the red Report icon (Report Maps unless you renamed the app) or Settings › Report a problem. If no report could be sent, leave it empty and attach the crash file from Documents/Morphe below.
+      placeholder: MC-XXXX-XXXX
+  - type: input
+    id: car
+    attributes:
+      label: Car model
+      placeholder: BYD Dolphin
+    validations:
+      required: true
+  - type: input
+    id: dilink
+    attributes:
+      label: DiLink version
+      placeholder: DiLink 3.0, Android 10
+    validations:
+      required: true
+  - type: input
+    id: bundle
+    attributes:
+      label: Bundle version
+      description: Shown under the report screen's title, and its QR codes fill it in for you. On builds before 0.1.5, use the patches version Morphe Desktop showed when you patched.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: maps
+    attributes:
+      label: Google Maps (Android Automotive) version
+      description: Shown under the report screen's title too.
+      placeholder: 26.10.120003.E
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what the app did instead. Say if the app was in safe mode or you turned features off.
+    validations:
+      required: true

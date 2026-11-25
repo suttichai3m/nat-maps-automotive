@@ -1,0 +1,79 @@
+import com.android.build.api.dsl.ApplicationExtension
+
+dependencies {
+    implementation(libs.morphe.extensions.library)
+    implementation(project(":extensions:shared:library"))
+    compileOnly(libs.annotation)
+}
+
+// The problem report's server, set when the bundle is built and never committed: the Gradle
+// properties mapsCarReportUrl and mapsCarReportKeyFile (the key is the file's first line), or the
+// environment variables MAPS_CAR_REPORT_URL and MAPS_CAR_REPORT_KEY. Without them the app has no
+// send button, so a build from this source never sends reports to someone else's server.
+val reportUrl = (providers.gradleProperty("mapsCarReportUrl").orNull
+    ?: providers.environmentVariable("MAPS_CAR_REPORT_URL").orNull)?.trim().orEmpty()
+val reportKey = providers.gradleProperty("mapsCarReportKeyFile").orNull?.let { path ->
+    val keyFile = file(path.trim())
+    if (!keyFile.isFile) throw GradleException("mapsCarReportKeyFile is not a file: $keyFile")
+    keyFile.useLines { lines -> lines.firstOrNull() }?.trim().orEmpty()
+} ?: providers.environmentVariable("MAPS_CAR_REPORT_KEY").orNull?.trim().orEmpty()
+
+if (reportUrl.isEmpty() != reportKey.isEmpty()) {
+    throw GradleException("Set both the problem report URL and key, or neither (docs/build-setup.md)")
+}
+if (reportUrl.isNotEmpty()) {
+    if (!Regex("https://[A-Za-z0-9.-]+").matches(reportUrl)) {
+        throw GradleException("The problem report URL must be https://<host> without a path")
+    }
+    if (!Regex("[A-Za-z0-9_-]{32,}").matches(reportKey)) {
+        throw GradleException("The problem report key must be 32 or more URL-safe base64 characters")
+    }
+}
+logger.lifecycle(
+    "Maps Car problem report: " +
+        if (reportUrl.isEmpty()) "not configured (no send button)" else "configured for ${reportUrl.removePrefix("https://")}",
+)
+
+// The public repository (gradle.properties): the report screen's link and the QR code of a new issue.
+val projectUrl = providers.gradleProperty("projectUrl").get().trim()
+if (!Regex("https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+").matches(projectUrl) || projectUrl.endsWith(".git")) {
+    throw GradleException("projectUrl must be https://github.com/<owner>/<repository>, without .git or a trailing slash")
+}
+
+// The in-app update (gradle.properties): the SHA-256 of the signing certificate that an APK offered by the report
+// server must have. Empty: the app never asks the server for an APK and says to patch with Morphe Desktop.
+val apkUpdateSigner = providers.gradleProperty("apkUpdateSigner").orNull?.trim()?.lowercase().orEmpty()
+if (apkUpdateSigner.isNotEmpty()) {
+    if (!Regex("[0-9a-f]{64}").matches(apkUpdateSigner)) {
+        throw GradleException("apkUpdateSigner must be the APK certificate's SHA-256, 64 hex digits")
+    }
+}
+logger.lifecycle(
+    "Maps Car in-app update: " + when {
+        apkUpdateSigner.isEmpty() -> "off (no apkUpdateSigner)"
+        reportUrl.isEmpty() -> "off (no report server, which offers the APK)"
+        else -> "APKs signed by ${apkUpdateSigner.take(12)}… from the report server"
+    },
+)
+
+configure<ApplicationExtension> {
+    namespace = "app.morphe.extension"
+    compileSdk = 36
+
+    defaultConfig {
+        minSdk = 29
+        buildConfigField("String", "MAPS_CAR_REPORT_URL", "\"$reportUrl\"")
+        buildConfigField("String", "MAPS_CAR_REPORT_KEY", "\"$reportKey\"")
+        buildConfigField("String", "MAPS_CAR_PROJECT_URL", "\"$projectUrl\"")
+        buildConfigField("String", "MAPS_CAR_APK_SIGNER", "\"$apkUpdateSigner\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
