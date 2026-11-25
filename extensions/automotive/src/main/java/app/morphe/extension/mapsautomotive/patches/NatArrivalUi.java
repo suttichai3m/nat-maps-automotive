@@ -22,6 +22,34 @@ import java.util.regex.Pattern;
 /** Experimental: formats only an existing, explicitly labelled arrival percentage. */
 public final class NatArrivalUi {
     private static final Pattern ARRIVAL = Pattern.compile("(?iu)^\\s*(?:Arrive with|แบตเมื่อถึง|แบตเตอรี่เมื่อถึง(?:ปลายทาง)?|แบตเมื่อไปถึง)\\s*([0-9]{1,3}\\s*[%％])\\s*$");
+    // Only accept an unlabelled percentage in a route summary containing distance and time.
+    private static final Pattern PERCENT = Pattern.compile("(?<![0-9])([0-9]{1,3}\\s*[%％])");
+    private static final Pattern DISTANCE = Pattern.compile("(?iu)[0-9]+(?:[.,][0-9]+)?\\s*(?:กม\\.?|km|mi|เมตร|m\\b)");
+    private static final Pattern TIME = Pattern.compile("(?iu)(?:[0-9]{1,2}:[0-9]{2}|[0-9]+\\s*(?:นาที|ชม\\.?|min|hr|hours?))");
+    private static boolean routeSummary(CharSequence text) {
+        return DISTANCE.matcher(text).find() && TIME.matcher(text).find();
+    }
+    private static void collect(View v, StringBuilder out, int depth) {
+        if (depth > 5 || v.getVisibility() != View.VISIBLE || out.length() > 400) return;
+        if (v instanceof TextView) out.append(((TextView)v).getText()).append(' ');
+        else if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup)v;
+            for (int i=0; i<g.getChildCount(); i++) collect(g.getChildAt(i), out, depth+1);
+        }
+    }
+    private static boolean nearbyRoute(TextView tv) {
+        android.view.ViewParent parent = tv.getParent();
+        for (int i=0; i<2 && parent instanceof ViewGroup; i++, parent=parent.getParent()) {
+            StringBuilder out = new StringBuilder();
+            collect((View)parent, out, 0);
+            if (out.length() <= 400 && routeSummary(out)) {
+                Matcher m = PERCENT.matcher(out);
+                if (m.find() && !m.find()) return true;
+            }
+        }
+        return false;
+    }
+
     private static final WeakHashMap<Activity, Boolean> INSTALLED = new WeakHashMap<>();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static final class NatSize extends ReplacementSpan {
@@ -30,7 +58,7 @@ public final class NatArrivalUi {
         NatSize(int value, boolean dark) { this.value = value; this.dark = dark; }
         private Paint numberPaint(Paint original) {
             Paint p = new Paint(original);
-            p.setTextSize(original.getTextSize() * 1.65f);
+            p.setTextSize(original.getTextSize() * 2.0f);
             p.setTypeface(Typeface.create(original.getTypeface(), Typeface.BOLD));
             p.setColor(dark ? 0xfff0f6ff : 0xff163f59);
             return p;
@@ -63,6 +91,7 @@ public final class NatArrivalUi {
     private NatArrivalUi() {}
     public static void install(Activity activity) {
         if (activity == null || INSTALLED.put(activity, true) != null) return;
+        android.util.Log.i("NatArrivalUi", "V2.1 hook installed");
         WeakReference<Activity> ref = new WeakReference<>(activity);
         MAIN.postDelayed(new Runnable() {
             @Override public void run() {
@@ -86,7 +115,15 @@ public final class NatArrivalUi {
             CharSequence text = tv.getText();
             if (text == null) return;
             Matcher m = ARRIVAL.matcher(text);
-            if (!m.matches()) return;
+            if (!m.matches()) {
+                m = PERCENT.matcher(text);
+                if (!m.find()) return;
+                int first = m.start();
+                if (m.find()) return; // ambiguous: do not guess which battery value is arrival
+                m.reset();
+                if (!m.find() || m.start() != first) return;
+                if (!routeSummary(text) && !(text.toString().trim().matches("[0-9]{1,3}\\s*[%％]" ) && nearbyRoute(tv))) return;
+            }
             int value = Integer.parseInt(m.group(1).replaceAll("[^0-9]", ""));
             if (value > 100) return;
             boolean dark = (tv.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
@@ -98,6 +135,7 @@ public final class NatArrivalUi {
             for (NatSize old : styled.getSpans(0, styled.length(), NatSize.class)) styled.removeSpan(old);
             styled.setSpan(new NatSize(value, dark), m.start(1), m.end(1), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             tv.setText(styled);
+            android.util.Log.i("NatArrivalUi", "V2.1 styled arrival percentage");
         } else if (view instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) view;
             for (int i = 0; i < group.getChildCount(); i++) scan(group.getChildAt(i), depth + 1);
