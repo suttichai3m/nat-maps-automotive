@@ -300,17 +300,13 @@ private fun refreshMethod(controller: ClassDef, update: Method, night: String, r
                 iget-boolean v0, p0, $night
                 $invoke { p0, p1 }, ${controller.type}->${update.name}($CONFIGURATION)V
                 iget-boolean v1, p0, $night
-                if-eq v0, v1, :morphe_night_unchanged
+                xor-int v1, v0, v1
                 iget-object v0, p0, ${refresh.lazyField}
                 invoke-interface { v0 }, ${refresh.lazyGet}
                 move-result-object v0
                 check-cast v0, ${refresh.refreshType}
                 invoke-interface { v0 }, ${refresh.refresh}
-                const/4 v0, 0x1
-                return v0
-                :morphe_night_unchanged
-                const/4 v0, 0x0
-                return v0
+                return v1
             """.trimIndent(),
         )
     }

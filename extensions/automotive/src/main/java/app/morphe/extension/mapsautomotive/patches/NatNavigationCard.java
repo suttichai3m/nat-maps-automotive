@@ -17,7 +17,62 @@ final class NatNavigationCard {
     private static final WeakHashMap<View, Card> CARDS = new WeakHashMap<>();
     static void clear(View root) {
         Card c = CARDS.remove(root);
-        if (c != null) root.getOverlay().remove(c);
+        if (c != null) {
+            root.getOverlay().remove(c);
+            restoreNative(c);
+        }
+    }
+
+    // Retain original characters for live SOC parsing; preserve layout width.
+    private static final class HiddenSoc extends android.text.style.ReplacementSpan {
+        final int width;
+        HiddenSoc(int width) { this.width = width; }
+        @Override public int getSize(Paint paint, CharSequence text, int start, int end, Paint.FontMetricsInt fm) {
+            return width;
+        }
+        @Override public void draw(Canvas canvas, CharSequence text, int start, int end, float x,
+                                   int top, int y, int bottom, Paint paint) { }
+    }
+    private static void restoreNative(Card c) {
+        TextView tv = c.source == null ? null : c.source.get();
+        HiddenSoc hidden = c.hidden;
+        android.text.Spanned original = c.original;
+        c.hidden = null;
+        c.original = null;
+        if (tv == null || hidden == null) return;
+        CharSequence current = tv.getText();
+        if (!(current instanceof android.text.Spanned)) return;
+        android.text.Spanned sp = (android.text.Spanned) current;
+        if (sp.getSpanStart(hidden) < 0) return;
+        android.text.SpannableString restored = new android.text.SpannableString(current);
+        restored.removeSpan(hidden);
+        if (original != null && current.toString().equals(original.toString())) {
+            for (android.text.style.ReplacementSpan span : original.getSpans(0, original.length(), android.text.style.ReplacementSpan.class)) {
+                int a = original.getSpanStart(span), b = original.getSpanEnd(span);
+                if (a >= 0 && b <= restored.length() && restored.getSpanStart(span) < 0)
+                    restored.setSpan(span, a, b, original.getSpanFlags(span));
+            }
+        }
+        tv.setText(restored);
+    }
+    private static void hideNative(Card c, TextView tv, int start, int width) {
+        CharSequence current = tv.getText();
+        if (c.hidden != null && c.source != null && c.source.get() == tv
+                && current instanceof android.text.Spanned
+                && ((android.text.Spanned) current).getSpanStart(c.hidden) == start
+                && ((android.text.Spanned) current).getSpanEnd(c.hidden) == current.length()) return;
+        restoreNative(c);
+        current = tv.getText();
+        if (start < 0 || start >= current.length() || width <= 0) return;
+        android.text.SpannableString styled = new android.text.SpannableString(current);
+        for (android.text.style.ReplacementSpan span : styled.getSpans(start, styled.length(), android.text.style.ReplacementSpan.class)) {
+            if (styled.getSpanStart(span) < start || styled.getSpanEnd(span) > styled.length()) return;
+            styled.removeSpan(span);
+        }
+        c.original = new android.text.SpannableString(current);
+        c.hidden = new HiddenSoc(width);
+        styled.setSpan(c.hidden, start, styled.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        tv.setText(styled);
     }
     static boolean owns(TextView tv) {
         Card c=CARDS.get(tv.getRootView());
@@ -124,7 +179,9 @@ final class NatNavigationCard {
         Matcher suffix=TAIL.matcher(t);
         if(!suffix.find()) return null;
         int start=suffix.start();
-        // Preserve separators, ETA, distance, and every unrelated glyph.
+        while (start>0 && Character.isWhitespace(t.charAt(start-1))) start--;
+        if (start>0 && "·•・|".indexOf(t.charAt(start-1))>=0) start--;
+        // Preserve ETA, distance, and every unrelated glyph.
         Rect soc=textRange(tv,start,t.length());
         Rect prefix=start==0?null:textRange(tv,0,start);
         if(soc==null || (start>0 && prefix==null)) return null;
@@ -222,14 +279,27 @@ final class NatNavigationCard {
         boolean dark=ColorScheme.nightColors(tv.getContext());
         Card c=existing;
         if(c==null) { c=new Card(); CARDS.put(root,c); root.getOverlay().add(c); }
+        if(c.source!=null && c.source.get()!=tv) restoreNative(c);
         c.source=new java.lang.ref.WeakReference<>(tv); c.placement=placement;
-        status(root,"visible " + placement + " " + match.kind + " " + chosen + "dp");
+        // Suppress only a verified suffix once a safe card location is available.
+        Matcher suffix=TAIL.matcher(tv.getText());
+        if(regions!=null && !hasDrawable(tv) && suffix.find()) {
+            int start=suffix.start();
+            CharSequence nativeText=tv.getText();
+            while(start>0 && Character.isWhitespace(nativeText.charAt(start-1))) start--;
+            if(start>0 && "·•・|".indexOf(nativeText.charAt(start-1))>=0) start--;
+            hideNative(c,tv,start,regions[0].width());
+        } else restoreNative(c);
+        status(root,"visible " + placement + " " + match.kind + " " + chosen + "dp"
+                + (c.hidden!=null?" native SOC hidden":" native SOC retained"));
         if(c.soc==soc && c.thai==thai && c.dark==dark && c.getBounds().equals(area)) return;
         c.soc=soc; c.thai=thai; c.dark=dark; c.setBounds(area); c.invalidateSelf();
     }
     private static final class Card extends Drawable {
         int soc; boolean thai,dark; String placement="";
         java.lang.ref.WeakReference<TextView> source;
+        HiddenSoc hidden;
+        android.text.Spanned original;
         final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
         @Override public void draw(Canvas c) {
             Rect b=getBounds(); float u=b.width()/160f;
@@ -240,18 +310,23 @@ final class NatNavigationCard {
             p.setTextAlign(Paint.Align.LEFT); p.setTypeface(Typeface.DEFAULT); p.setTextSize(12*u); p.setColor(fg);
             c.drawText(thai?"แบตเมื่อถึง":"Arrival battery",b.left+10*u,b.top+16*u,p);
             p.setColor(soc<0?(dark?0xffff8888:0xffb91c1c):fg);
-            p.setTypeface(Typeface.DEFAULT_BOLD); p.setTextSize(36*u);
+            p.setTypeface(Typeface.DEFAULT_BOLD); p.setTextSize((soc<0?32:36)*u);
             String number=soc+"%";
             float max=b.width()-20*u;
             if(p.measureText(number)>max) p.setTextSize(p.getTextSize()*max/p.measureText(number));
-            c.drawText(number,b.left+10*u,b.top+53*u,p);
+            c.drawText(number,b.left+10*u,b.top+(soc<0?47:53)*u,p);
+            if(soc<0) {
+                p.setTypeface(Typeface.DEFAULT); p.setTextSize(12*u);
+                p.setColor(dark?0xffff8888:0xffb91c1c);
+                c.drawText(thai?"ต้องชาร์จ":"Charge required",b.left+10*u,b.top+69*u,p);
+                return;
+            }
             float l=b.left+10*u,r=b.right-15*u,t=b.bottom-15*u,bot=b.bottom-7*u;
             p.setColor(dark?0xff485461:0xffb9cbd4); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1.2f*u);
             c.drawRoundRect(l,t,r,bot,2*u,2*u,p);
             p.setStyle(Paint.Style.FILL); c.drawRoundRect(r+2*u,t+2*u,r+5*u,bot-2*u,u,u,p);
             int fill=NatSignedSoc.bar(soc); p.setColor(accent);
             if(fill>0) c.drawRoundRect(l+2*u,t+2*u,l+2*u+(r-l-4*u)*fill/100f,bot-2*u,u,u,p);
-            if(soc<0) { p.setTextSize(10*u);p.setColor(dark?0xffff8888:0xffb91c1c); c.drawText(thai?"ต้องชาร์จ":"Charge required",b.left+10*u,b.top+63*u,p); }
         }
         @Override public void setAlpha(int a) { }
         @Override public void setColorFilter(ColorFilter f) { }

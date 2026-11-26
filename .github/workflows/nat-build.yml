@@ -24,6 +24,10 @@ jobs:
         run: bash scripts/test-navigation-summary.sh
       - name: Theme schedule tests
         run: bash scripts/test-theme-schedule.sh
+      - name: Battery frame placement tests
+        run: bash scripts/test-battery-placement.sh
+      - name: Integrated battery tests
+        run: bash scripts/test-integrated-battery.sh
       - name: Build patch
         env:
           GITHUB_ACTOR: ${{ github.actor }}

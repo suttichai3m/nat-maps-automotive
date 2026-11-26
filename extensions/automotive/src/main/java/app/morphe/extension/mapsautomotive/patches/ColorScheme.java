@@ -533,10 +533,15 @@ public final class ColorScheme {
                     // The refresh binds a Settings row again with the subtitle it was built with.
                     subtitleAfterRefresh();
                 } else {
-                    ReportLog.i(TAG, "V2.5 controller reported no color change (" + reason + ")");
+                    ReportLog.i(TAG, "Controller reported no color change (" + reason + ")");
+                    subtitleAfterRefresh();
                 }
+                if (attempt == 0 && reason.startsWith("choice "))
+                    mainHandler().postDelayed(() -> refreshAttempt(reason, generation, 1), 750L);
             } catch (Throwable error) {
                 ReportLog.w(TAG, "Color refresh failed", error);
+                if (attempt < 3)
+                    mainHandler().postDelayed(() -> refreshAttempt(reason, generation, attempt + 1), 500L << attempt);
             }
         }
     }
@@ -860,6 +865,7 @@ public final class ColorScheme {
         choice = chosen;
         if (window != null) times = window.clone();
         boolean on = SafeMode.on(activity, SafeMode.COLOR_SCHEME);
+        switchOn = on;
         ReportLog.i(TAG, "Color scheme set to " + chosen + (window != null ? ", night " + span(window) : "")
                 + " (saved " + saved + ")" + (on ? "" : " while switched off"));
         ReportBuilder.saveSnapshot(activity.getApplicationContext(), true);
