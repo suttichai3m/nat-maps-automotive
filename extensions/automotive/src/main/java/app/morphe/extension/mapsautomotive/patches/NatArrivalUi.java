@@ -63,10 +63,11 @@ public final class NatArrivalUi {
         private final String comparison;
         private final boolean navigation;
         private final float maxWidth;
-        NatSize(int value, boolean dark, boolean thai, String comparison, boolean navigation, float maxWidth) { this.maxWidth = maxWidth; this.navigation = navigation; this.value = value; this.dark = dark; this.thai = thai; this.comparison = comparison; }
+        private final float density;
+        NatSize(int value, boolean dark, boolean thai, String comparison, boolean navigation, float maxWidth, float density) { this.density = density; this.maxWidth = maxWidth; this.navigation = navigation; this.value = value; this.dark = dark; this.thai = thai; this.comparison = comparison; }
         private Paint numberPaint(Paint original) {
             Paint p = new Paint(original);
-            p.setTextSize(original.getTextSize() * (navigation ? 2.5f : 2.0f));
+            p.setTextSize(navigation ? Math.max(original.getTextSize(), 50f * density) : original.getTextSize() * 2.0f);
             if (maxWidth > 0) { float measured = p.measureText(value + "%"); if (measured > maxWidth - original.getTextSize()) p.setTextSize(p.getTextSize() * Math.max(.1f, (maxWidth - original.getTextSize()) / measured)); }
             p.setTypeface(Typeface.create(original.getTypeface(), Typeface.BOLD));
             p.setColor(value < 0 ? (dark ? 0xffff8888 : 0xffb91c1c) : (dark ? 0xffffffff : 0xff111111));
@@ -74,6 +75,10 @@ public final class NatArrivalUi {
         }
         @Override public int getSize(Paint paint, CharSequence text, int start, int end, Paint.FontMetricsInt fm) {
             float u = paint.getTextSize();
+            if (navigation) {
+                if (fm != null) { fm.ascent = Math.min(fm.ascent, -Math.round(92*density)); fm.descent = Math.max(fm.descent, Math.round(32*density)); fm.top = fm.ascent; fm.bottom = fm.descent; }
+                return Math.round(220*density);
+            }
             Paint p = numberPaint(paint);
             if (fm != null) {
                 fm.ascent = Math.min(fm.ascent, (int)Math.floor(p.ascent() - u * 1.15f));
@@ -84,6 +89,26 @@ public final class NatArrivalUi {
             return (int)Math.ceil(Math.min(maxWidth > 0 ? maxWidth : Float.MAX_VALUE, Math.max(u * (navigation ? 7.5f : 5.2f), p.measureText(text, start, end) + u)));
         }
         @Override public void draw(Canvas c, CharSequence text, int start, int end, float x, int top, int y, int bottom, Paint paint) {
+            if (navigation) {
+                float d=density, t=y-92*d, w=220*d;
+                Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+                p.setColor(dark?0xff172b40:0xffe5f1f7);
+                c.drawRoundRect(new RectF(x,t,x+w,t+124*d),10*d,10*d,p);
+                p.setColor(dark?0xffffffff:0xff172b40); p.setTextAlign(Paint.Align.CENTER); p.setTextSize(12*d);
+                c.drawText(thai?"แบตตามเส้นทาง":"Route battery",x+w/2,t+20*d,p);
+                p.setColor(value<0?0xffef4444:0xff179b64); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(2*d);
+                c.drawRoundRect(new RectF(x+12*d,t+40*d,x+44*d,t+65*d),3*d,3*d,p);
+                p.setStyle(Paint.Style.FILL); c.drawRect(x+44*d,t+47*d,x+48*d,t+58*d,p);
+                if(value>0)c.drawRect(x+15*d,t+43*d,x+(15+26*NatSignedSoc.bar(value)/100f)*d,t+62*d,p);
+                p.setColor(value<0?(dark?0xffff8888:0xffb91c1c):(dark?0xffffffff:0xff172b40));
+                p.setTypeface(Typeface.DEFAULT_BOLD); p.setTextSize(50*d);
+                c.drawText(value+"%",x+130*d,t+79*d,p);
+                p.setTypeface(Typeface.DEFAULT); p.setTextSize(11*d);
+                if(value<0)c.drawText(thai?"ต้องชาร์จ":"Charge required",x+w/2,t+94*d,p);
+                p.setColor(dark?0xff485461:0xffc2ced8); c.drawRoundRect(new RectF(x+12*d,t+106*d,x+208*d,t+116*d),3*d,3*d,p);
+                if(value>0){p.setColor(0xff179b64);c.drawRoundRect(new RectF(x+12*d,t+106*d,x+(12+196*NatSignedSoc.bar(value)/100f)*d,t+116*d),3*d,3*d,p);}
+                return;
+            }
             float u = paint.getTextSize(), w = getSize(paint, text, start, end, null);
             Paint p = numberPaint(paint), shape = new Paint(Paint.ANTI_ALIAS_FLAG);
             float t = y + p.ascent() - u * 1.1f, b = y + p.descent() + u * (comparison.isEmpty() ? .6f : 1.6f);
@@ -138,13 +163,14 @@ public final class NatArrivalUi {
             if (v == null) return;
             QUEUED.remove(v);
             if (!v.isAttachedToWindow() || !v.hasWindowFocus() || !SafeMode.on(v.getContext(), SafeMode.BYD_BATTERY)) {
-                NatNavigationCard.clear(v); return;
+                NatNavigationCard.clear(v); NatDedicatedFrame.clear(v); return;
             }
             try {
                 java.util.ArrayList<TextView> matches = new java.util.ArrayList<>();
                 scan(v, 0, matches);
                 if (matches.isEmpty()) collectSplitSummary(v, 0, matches);
-                NatNavigationCard.refresh(v, matches);
+                NatNavigationCard.clear(v);
+                NatDedicatedFrame.refresh(v, matches);
             }
             catch (RuntimeException error) { NatNavigationCard.clear(v); }
         }, 250);
@@ -159,7 +185,7 @@ public final class NatArrivalUi {
         root.getViewTreeObserver().addOnWindowFocusChangeListener(focused -> {
             View v = r.get();
             if (v == null) return;
-            if (focused) requestRefresh(v); else NatNavigationCard.clear(v);
+            if (focused) requestRefresh(v); else { NatNavigationCard.clear(v); NatDedicatedFrame.clear(v); }
         });
     }
     private static void watch(TextView tv) {
@@ -187,7 +213,7 @@ public final class NatArrivalUi {
             for (int i=0;i<group.getChildCount();i++) collectSplitSummary(group.getChildAt(i),depth+1,matches);
         } else if (view instanceof TextView && !(view instanceof android.widget.EditText)) {
             TextView tv=(TextView)view;
-            if (tv.getText()==null) return;
+            if (tv.getText()==null || NatDedicatedFrame.owns(tv)) return;
             Integer own = NatSignedSoc.parse(NatNavigationSummary.normalize(tv.getText()));
             if (own == null) own = NatNavigationSummary.localSoc(tv.getText());
             if (own == null) return;
@@ -203,11 +229,33 @@ public final class NatArrivalUi {
             }
         }
     }
+    // Render inside the native summary rather than searching for an empty overlay rectangle.
+    private static void styleNavigation(TextView tv) {
+        CharSequence text = tv.getText();
+        if (text == null) return;
+        Matcher m = PERCENT.matcher(text);
+        if (!m.find()) return;
+        int start=m.start(1), end=m.end(1);
+        Integer value=NatSignedSoc.parse(m.group(1));
+        if(value==null || m.find()) return;
+        boolean dark=ColorScheme.nightColors(tv.getContext());
+        boolean thai="th".equals(tv.getResources().getConfiguration().getLocales().get(0).getLanguage());
+        if(text instanceof Spanned) {
+            NatSize[] old=((Spanned)text).getSpans(0,text.length(),NatSize.class);
+            if(old.length==1 && old[0].navigation && old[0].value==value && old[0].dark==dark) return;
+        }
+        SpannableString styled=new SpannableString(text);
+        for(NatSize old:styled.getSpans(0,styled.length(),NatSize.class)) styled.removeSpan(old);
+        styled.setSpan(new NatSize(value,dark,thai,value<0?(thai?"ต้องชาร์จ":"Charge required"):"",true,0,tv.getResources().getDisplayMetrics().density),start,end,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        tv.setText(styled);
+        tv.requestLayout();
+        tv.invalidate();
+    }
     private static void scan(View view, int depth, java.util.List<TextView> matches) {
         if (depth > 40 || !view.isShown()) return;
         if (view instanceof TextView) {
             TextView tv = (TextView) view;
-            if (tv instanceof android.widget.EditText || tv.isTextSelectable()) return;
+            if (tv instanceof android.widget.EditText || tv.isTextSelectable() || NatDedicatedFrame.owns(tv)) return;
             CharSequence text = tv.getText();
             if (text == null) return;
             Matcher nav = NAV.matcher(text.toString().replace("\u00a0", " "));
@@ -253,7 +301,7 @@ public final class NatArrivalUi {
             }
             SpannableString styled = new SpannableString(text);
             for (NatSize old : styled.getSpans(0, styled.length(), NatSize.class)) styled.removeSpan(old);
-            styled.setSpan(new NatSize(value, dark, thai, comparison, navigation, maxWidth), m.start(1), m.end(1), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            styled.setSpan(new NatSize(value, dark, thai, comparison, navigation, maxWidth, tv.getResources().getDisplayMetrics().density), m.start(1), m.end(1), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
 
             tv.setText(styled);
 

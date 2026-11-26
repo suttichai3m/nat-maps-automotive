@@ -552,7 +552,14 @@ public final class ColorScheme {
     }
 
     private static Configuration liveConfiguration() {
-        return application().getResources().getConfiguration();
+        Configuration config = new Configuration(application().getResources().getConfiguration());
+        if (on()) {
+            String selected = choice();
+            if (DAY.equals(selected) || NIGHT.equals(selected)) {
+                config.uiMode = (config.uiMode & ~Configuration.UI_MODE_NIGHT_MASK) | (NIGHT.equals(selected) ? Configuration.UI_MODE_NIGHT_YES : Configuration.UI_MODE_NIGHT_NO);
+            }
+        }
+        return config;
     }
 
     // The system night flag, for Auto while it shows Maps' own value.

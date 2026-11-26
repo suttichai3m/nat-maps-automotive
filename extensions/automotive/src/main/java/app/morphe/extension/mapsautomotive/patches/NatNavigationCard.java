@@ -29,8 +29,8 @@ final class NatNavigationCard {
         if(value==null) value=NatNavigationSummary.localSoc(text);
         return value!=null?value:NatSignedSoc.parse(NatNavigationSummary.normalize(text));
     }
-    static void refresh(View root, java.util.List<TextView> matches) {
-        if (matches.isEmpty()) { pending(root); return; }
+    static boolean refresh(View root, java.util.List<TextView> matches) {
+        if (matches.isEmpty()) { clear(root); return false; }
         TextView tv=matches.get(0);
         Integer soc=readSoc(tv);
 
@@ -38,7 +38,7 @@ final class NatNavigationCard {
             if (!java.util.Objects.equals(soc,readSoc(match.getText()))) soc=null;
         }
         Rect visible=new Rect();
-        if (!tv.getGlobalVisibleRect(visible)) { pending(root); return; }
+        if (!tv.getGlobalVisibleRect(visible)) { clear(root); return false; }
         int[] origin=new int[2]; root.getLocationOnScreen(origin);
         int[] pos=new int[2]; tv.getLocationOnScreen(pos);
         float d=root.getResources().getDisplayMetrics().density;
@@ -52,42 +52,17 @@ final class NatNavigationCard {
             Rect target=new Rect(local); target.offset(origin[0],origin[1]);
             if (!obstructs(root,target,tv,0)) { chosen=local; break; }
         }
-        if (chosen==null) { pending(root); return; }
+        if (chosen==null) { clear(root); return false; }
         int x=chosen.left,y=chosen.top;
         boolean thai=tv.getResources().getConfiguration().getLocales().get(0).getLanguage().equals("th") || tv.getText().toString().matches("(?s).*[\\u0E00-\\u0E7F].*");
         boolean dark=ColorScheme.nightColors(tv.getContext());
         Card c=CARDS.get(root);
         if(c==null) { c=new Card(); CARDS.put(root,c); root.getOverlay().add(c); }
-        c.lastSeen=android.os.SystemClock.elapsedRealtime();
-        c.expiryQueued=false;
         boolean changed=!java.util.Objects.equals(c.soc,soc) || c.thai!=thai || c.dark!=dark;
         c.soc=soc; c.thai=thai; c.dark=dark;
         if (!c.getBounds().equals(chosen)) c.setBounds(chosen);
         if (changed) c.invalidateSelf();
-    }
-    // Brief layout transitions may hide the native summary. Never retain stale SOC.
-    private static void pending(View root) {
-        Card c=CARDS.get(root);
-        if(c==null) return;
-        if(!NatCardContinuity.keep(android.os.SystemClock.elapsedRealtime()-c.lastSeen)
-                || c.getBounds().right>root.getWidth() || c.getBounds().bottom>root.getHeight()) {
-            clear(root); return;
-        }
-        int[] origin=new int[2]; root.getLocationOnScreen(origin);
-        Rect target=new Rect(c.getBounds()); target.offset(origin[0],origin[1]);
-        if(obstructs(root,target,null,0)) { clear(root); return; }
-        if (!c.expiryQueued) {
-            c.expiryQueued = true;
-            java.lang.ref.WeakReference<View> ref = new java.lang.ref.WeakReference<>(root);
-            long seen = c.lastSeen;
-            root.postDelayed(() -> {
-                View v = ref.get();
-                if (v != null && CARDS.get(v) == c && c.lastSeen == seen
-                        && !NatCardContinuity.keep(android.os.SystemClock.elapsedRealtime()-seen)) clear(v);
-            }, Math.max(1, NatCardContinuity.MAX_MS+1-(android.os.SystemClock.elapsedRealtime()-seen)));
-        }
-        boolean dark=ColorScheme.nightColors(root.getContext());
-        if(c.soc!=null || c.dark!=dark) { c.soc=null; c.dark=dark; c.invalidateSelf(); }
+        return true;
     }
     // Never cover visible text or actionable leaf controls.
     private static boolean obstructs(View v, Rect target, View anchor, int depth) {
@@ -103,7 +78,7 @@ final class NatNavigationCard {
         return false;
     }
     private static final class Card extends Drawable {
-        Integer soc; boolean thai,dark,expiryQueued; long lastSeen;
+        Integer soc; boolean thai,dark;
         final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
         @Override public void draw(Canvas c) {
             Rect b=getBounds(); float u=b.width()/220f;
