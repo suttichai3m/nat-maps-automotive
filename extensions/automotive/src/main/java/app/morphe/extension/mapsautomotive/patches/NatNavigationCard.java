@@ -4,68 +4,254 @@ import android.graphics.*;
 import android.graphics.drawable.Drawable;
 import android.view.View;
 import android.view.ViewGroup;
+import android.text.Layout;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import android.widget.TextView;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.WeakHashMap;
 
-/** Experimental non-interactive overlay; native navigation remains untouched. */
+/** Integrated, non-interactive card anchored to the native navigation summary. Never changes SOC or controls. */
 final class NatNavigationCard {
-    private static final boolean VERIFIED_NAVIGATION_HOOK = false; // Fail closed until route identity and safe layout are proven.
     private static final WeakHashMap<View, Card> CARDS = new WeakHashMap<>();
     static void clear(View root) {
         Card c = CARDS.remove(root);
         if (c != null) root.getOverlay().remove(c);
     }
-    private static void find(View v, java.util.List<TextView> matches, int depth) {
-        if (depth > 40 || !v.isShown() || matches.size() > 1) return;
-        if (v instanceof TextView && !(v instanceof android.widget.EditText)) {
-            if (NatNavigationSummary.parse(((TextView)v).getText()) != null) matches.add((TextView)v);
-        } else if (v instanceof ViewGroup) {
-            ViewGroup g = (ViewGroup)v;
-            for (int i=0;i<g.getChildCount();i++) find(g.getChildAt(i),matches,depth+1);
+    static boolean owns(TextView tv) {
+        Card c=CARDS.get(tv.getRootView());
+        return c!=null && c.source!=null && c.source.get()==tv;
+    }
+    private static final WeakHashMap<View, String> STATUS = new WeakHashMap<>();
+    private static void status(View root, String message) {
+        if (!message.equals(STATUS.put(root,message))) ReportLog.i("NatArrivalUi", "Integrated frame: " + message);
+    }
+    private static boolean visibleText(View v) {
+        return v instanceof TextView && !(v instanceof android.widget.EditText)
+            && !((TextView)v).isTextSelectable() && v.isShown() && v.getGlobalVisibleRect(new Rect());
+    }
+    private static void collect(View v,List<TextView> text,int depth) {
+        if(depth>40 || !v.isShown() || !v.getGlobalVisibleRect(new Rect())) return;
+        if(visibleText(v)) { if(!NatNavigationSummary.normalize(((TextView)v).getText()).isEmpty()) text.add((TextView)v); }
+        else if(v instanceof ViewGroup) {
+            ViewGroup g=(ViewGroup)v;
+            for(int i=0;i<g.getChildCount();i++) collect(g.getChildAt(i),text,depth+1);
         }
     }
+    // Resource names observed in the supplied APK. They are hints, not a verified navigation state hook.
+    private static boolean panel(View v) {
+        try {
+            if(v.getId()==View.NO_ID) return false;
+            String name=v.getResources().getResourceEntryName(v.getId());
+            return name.equals("status_panel_visible_content") || name.equals("status_panel_single_row_center_view")
+                || name.equals("status_panel_single_row_start_view");
+        } catch(android.content.res.Resources.NotFoundException e) { return false; }
+    }
+    private static final class Match {
+        final TextView anchor; final int soc; final String kind; final View panel;
+        Match(TextView anchor,int soc,String kind){this.anchor=anchor;this.soc=soc;this.kind=kind;this.panel=summaryPanel(anchor);}
+    }
+    static boolean isNavigationSource(TextView v) {
+        return summaryPanel(v)!=null && (NatNavigationSummary.parse(v.getText())!=null || NatNavigationSummary.parseSocPart(v.getText())!=null);
+    }
+    private static View summaryPanel(View v) {
+        View best=null;
+        for(android.view.ViewParent parent=v.getParent(); parent instanceof ViewGroup; parent=parent.getParent()) {
+            View candidate=(View)parent;
+            if(panel(candidate)) best=candidate;
+        }
+        return best;
+    }
+    private static List<Match> matches(View root) {
+        ArrayList<TextView> all=new ArrayList<>(); collect(root,all,0);
+        ArrayList<Match> result=new ArrayList<>();
+        for(TextView tv:all) {
+            Integer n=NatNavigationSummary.parse(tv.getText());
+            if(n!=null) {
+                Match m=new Match(tv,n,"single");
+                if(m.panel!=null || NatNavigationSummary.parseLegacy(tv.getText())!=null) result.add(m);
+                continue;
+            }
+            Integer part=NatNavigationSummary.parseSocPart(tv.getText());
+            if(part==null) continue;
+            // Unlabelled standalone SOC must be in a known status-panel subtree with one complete summary.
+            View nativePanel=summaryPanel(tv);
+            android.view.ViewParent parent=tv.getParent();
+            for(int depth=0;depth<12 && parent instanceof ViewGroup;depth++,parent=parent.getParent()) {
+                View group=(View)parent;
+                if(!panel(group)) {
+                    // The nearest compact row inside a named status panel may itself have an obfuscated ID.
+                    boolean insideKnown=nativePanel!=null && ancestor(nativePanel,group);
+                    if(!insideKnown && (!NatNavigationSummary.isExplicitSoc(tv.getText()) || depth>1)) continue;
+                    float density=group.getResources().getDisplayMetrics().density;
+                    if(group.getHeight()>200*density || group.getWidth()>900*density) continue;
+                }
+                ArrayList<TextView> nearby=new ArrayList<>(); collect(group,nearby,0);
+                if(nearby.size()<2 || nearby.size()>6) continue;
+                ArrayList<String> pieces=new ArrayList<>();
+                for(TextView t:nearby) pieces.add(NatNavigationSummary.normalize(t.getText()));
+                Integer combined=NatNavigationSummary.parsePanelParts(pieces);
+                if(combined!=null && combined.equals(part)) { result.add(new Match(tv,part,"split")); break; }
+                if(group==nativePanel) break;
+            }
+        }
+        boolean known=false;
+        for(Match m:result) if(m.panel!=null) known=true;
+        if(known) result.removeIf(m->m.panel==null);
+        return result;
+    }
+    // Measure the actual rendered text, not the width of a match-parent TextView.
+    // Layout selection includes ReplacementSpan/emoji widths. Unknown layout fails closed.
+    private static Rect textRange(TextView tv,int start,int end) {
+        Layout l=tv.getLayout(); Rect visible=new Rect();
+        if(l==null || !tv.getGlobalVisibleRect(visible) || start<0 || end>l.getText().length() || start>=end) return null;
+        Path path=new Path(); l.getSelectionPath(start,end,path); RectF f=new RectF(); path.computeBounds(f,true);
+        if(f.isEmpty()) return null;
+        int[] location=new int[2]; tv.getLocationOnScreen(location);
+        // Global visible rect uses root coordinates; convert screen location using the root's screen origin.
+        View root=tv.getRootView(); int[] screen=new int[2]; root.getLocationOnScreen(screen);
+        Rect rootVisible=new Rect(); Point rootOffset=new Point();
+        if(!root.getGlobalVisibleRect(rootVisible,rootOffset)) return null;
+        int x=location[0]-screen[0]+rootOffset.x+tv.getTotalPaddingLeft()-tv.getScrollX();
+        int y=location[1]-screen[1]+rootOffset.y+tv.getTotalPaddingTop()-tv.getScrollY();
+        Rect r=new Rect((int)Math.floor(f.left)+x,(int)Math.floor(f.top)+y,(int)Math.ceil(f.right)+x,(int)Math.ceil(f.bottom)+y);
+        return r.intersect(visible)?r:null;
+    }
+    private static final Pattern TAIL=Pattern.compile("(?iu)(?:Arrival battery|Arrive with|Battery on arrival|แบตเมื่อถึง(?:ปลายทาง)?|แบตเตอรี่เมื่อถึง(?:ปลายทาง)?|ไปถึงโดยเหลือ)?\\s*[:：]?\\s*(?:\\uFFFC|🔋)?\\s*("+NatSignedSoc.TOKEN+")(?:\\s|\\uFFFC)*$");
+    private static Rect[] sourceRegions(Match m) {
+        TextView tv=m.anchor; CharSequence t=tv.getText();
+        Matcher suffix=TAIL.matcher(t);
+        if(!suffix.find()) return null;
+        int start=suffix.start();
+        // Preserve separators, ETA, distance, and every unrelated glyph.
+        Rect soc=textRange(tv,start,t.length());
+        Rect prefix=start==0?null:textRange(tv,0,start);
+        if(soc==null || (start>0 && prefix==null)) return null;
+        return new Rect[]{soc,prefix};
+    }
+    private static boolean hasDrawable(TextView tv) {
+        for(Drawable d:tv.getCompoundDrawables()) if(d!=null) return true;
+        return false;
+    }
+    private static boolean ancestor(View v,View child) {
+        for(android.view.ViewParent p=child.getParent();p instanceof View;p=p.getParent()) if(p==v) return true;
+        return false;
+    }
+    // The only native content we may visually replace is the complete, verified SOC text.
+    // Never intercept touches; protect other text and controls even inside the status panel.
+    private static boolean blocked(View v, Rect area, Match match, Rect[] source,int depth) {
+        if(depth>40 || !v.isShown()) return false;
+        Rect r=new Rect();
+        if(!v.getGlobalVisibleRect(r) || !Rect.intersects(r,area)) return false;
+        if(v==match.anchor && source!=null && !v.isClickable() && !v.isLongClickable() && !hasDrawable(match.anchor)) {
+            if(source[1]!=null && Rect.intersects(source[1],area)) return true;
+            return Rect.intersects(source[0],area) && !area.contains(source[0]);
+        }
+        if(v instanceof ViewGroup) {
+            ViewGroup g=(ViewGroup)v;
+            if((g.isClickable() || g.isLongClickable()) && !ancestor(g,match.anchor) && g.getWidth()<=area.width()*3 && g.getHeight()<=area.height()*3) return true;
+            for(int i=0;i<g.getChildCount();i++) if(blocked(g.getChildAt(i),area,match,source,depth+1)) return true;
+            return false;
+        }
+        if(v instanceof TextView) {
+            TextView tv=(TextView)v;
+            if(v.isClickable() || v.isLongClickable() || v.isFocusable() || hasDrawable(tv)) return true;
+            if(tv.getText().length()==0) return false;
+            Rect text=textRange(tv,0,tv.getText().length());
+            return text==null || Rect.intersects(text,area);
+        }
+        if(v instanceof android.widget.ImageView || v.isClickable() || v.isLongClickable() || v.isFocusable())
+            return v.getWidth()<=area.width()*3 && v.getHeight()<=area.height()*3;
+        return false;
+    }
+    private static NatBatteryPlacement.Box box(Rect r){return new NatBatteryPlacement.Box(r.left,r.top,r.width(),r.height());}
     static void refresh(View root) {
-        if (!VERIFIED_NAVIGATION_HOOK) { clear(root); return; }
-        java.util.ArrayList<TextView> matches = new java.util.ArrayList<>();
-        find(root,matches,0);
-        if (matches.size()!=1) { clear(root); return; }
-        TextView tv=matches.get(0);
-        Integer soc=NatNavigationSummary.parse(tv.getText());
-        if (soc==null) { clear(root); return; }
-        Rect visible=new Rect();
-        if (!tv.getGlobalVisibleRect(visible)) { clear(root); return; }
-        int[] origin=new int[2]; root.getLocationOnScreen(origin);
-        int[] pos=new int[2]; tv.getLocationOnScreen(pos);
+        if (!root.isShown() || !root.hasWindowFocus() || !SafeMode.on(root.getContext(), SafeMode.BYD_BATTERY)) { clear(root); status(root,"inactive"); return; }
+        List<Match> matches=matches(root);
+        if(matches.size()!=1) { clear(root); status(root,matches.isEmpty()?"no verified summary":"ambiguous summaries"); return; }
+        Match match=matches.get(0); TextView tv=match.anchor; int soc=match.soc;
+        Rect visible=new Rect(), viewport=new Rect(); Point offset=new Point();
+        if(!tv.getGlobalVisibleRect(visible) || !root.getGlobalVisibleRect(viewport,offset)) { clear(root); status(root,"not visible"); return; }
+        Rect[] regions=sourceRegions(match);
+        Rect anchor=regions==null?visible:regions[0];
+        Rect panelRect=new Rect();
+        boolean inside=match.panel!=null && match.panel.getGlobalVisibleRect(panelRect) && panelRect.intersect(viewport);
         float d=root.getResources().getDisplayMetrics().density;
-        int w=Math.round(156*d), h=Math.round(84*d), gap=Math.round(8*d);
-        int x=pos[0]-origin[0]+tv.getWidth()-w, y=pos[1]-origin[1]-h-gap;
-        // Avoid drawing outside the root or over the native summary itself.
-        if (x<0 || y<0 || x+w>root.getWidth() || y+h>root.getHeight()) { clear(root); return; }
-        boolean thai=tv.getResources().getConfiguration().getLocales().get(0).getLanguage().equals("th") || tv.getText().toString().matches("(?s).*[\\u0E00-\\u0E7F].*");
+        int gap=Math.max(1,Math.round(4*d)); Rect area=null; int chosen=0; String placement="";
+        Card existing=CARDS.get(root);
+        // Prioritize the right-hand cell INSIDE the same summary panel at all supported sizes.
+        // If a compact native layout has no room, only try directly adjacent to the panel.
+        for(int mode=0;mode<2 && area==null;mode++) {
+            if(mode==0 && !inside) continue;
+            Rect boundary=inside?panelRect:visible;
+            for(int size:new int[]{160,144,128}) {
+                int w=Math.round(size*d), h=Math.round(size*.50f*d);
+                List<NatBatteryPlacement.Box> candidates=mode==0
+                    ? NatBatteryPlacement.integrated(box(boundary),box(anchor),w,h,gap)
+                    : NatBatteryPlacement.adjacent(box(viewport),box(boundary),box(anchor),w,h,gap);
+                // Prefer replacing the complete small SOC in its existing cell, not duplicating it.
+                // If impossible, a nearby free cell still gives a readable value without hiding native text.
+                for(int pass=0;pass<2 && area==null;pass++) {
+                    if(pass==0 && (mode!=0 || regions==null)) continue;
+                    for(NatBatteryPlacement.Box b:candidates) {
+                        Rect candidate=new Rect(b.x,b.y,b.x+b.w,b.y+b.h);
+                        if(pass==0 && !candidate.contains(regions[0])) continue;
+                        if(!blocked(root,candidate,match,mode==0?regions:null,0)) { area=candidate; chosen=size; placement=mode==0?"integrated":"adjacent"; break; }
+                    }
+                }
+                if(area!=null) break;
+            }
+        }
+        if(area==null) { clear(root); status(root,"no safe summary space"); return; }
+        if(existing!=null && existing.placement.equals(placement) && existing.getBounds().width()==area.width() && existing.getBounds().height()==area.height()) {
+            Rect previous=new Rect(existing.getBounds()); previous.offset(offset.x,offset.y);
+            boolean isIntegrated=placement.equals("integrated");
+            boolean sameCoverage=regions==null || previous.contains(regions[0])==area.contains(regions[0]);
+            if(sameCoverage && viewport.contains(previous) && (!isIntegrated || panelRect.contains(previous))
+                && (isIntegrated || !Rect.intersects(previous,inside?panelRect:visible))
+                && !blocked(root,previous,match,isIntegrated?regions:null,0)) {
+                // Still anchored: accept only a candidate generated for the current layout, not an old map position.
+                List<NatBatteryPlacement.Box> allowed=isIntegrated?NatBatteryPlacement.integrated(box(panelRect),box(anchor),previous.width(),previous.height(),gap)
+                    :NatBatteryPlacement.adjacent(box(viewport),box(inside?panelRect:visible),box(anchor),previous.width(),previous.height(),gap);
+                for(NatBatteryPlacement.Box b:allowed) if(b.x==previous.left && b.y==previous.top) {area=previous; break;}
+            }
+        }
+        area.offset(-offset.x,-offset.y);
+        boolean thai="th".equals(tv.getResources().getConfiguration().getLocales().get(0).getLanguage()) || tv.getText().toString().matches("(?s).*[\\u0E00-\\u0E7F].*");
         boolean dark=ColorScheme.nightColors(tv.getContext());
-        Card c=CARDS.get(root);
+        Card c=existing;
         if(c==null) { c=new Card(); CARDS.put(root,c); root.getOverlay().add(c); }
-        c.soc=soc; c.thai=thai; c.dark=dark; c.setBounds(x,y,x+w,y+h); c.invalidateSelf();
+        c.source=new java.lang.ref.WeakReference<>(tv); c.placement=placement;
+        status(root,"visible " + placement + " " + match.kind + " " + chosen + "dp");
+        if(c.soc==soc && c.thai==thai && c.dark==dark && c.getBounds().equals(area)) return;
+        c.soc=soc; c.thai=thai; c.dark=dark; c.setBounds(area); c.invalidateSelf();
     }
     private static final class Card extends Drawable {
-        int soc; boolean thai,dark;
+        int soc; boolean thai,dark; String placement="";
+        java.lang.ref.WeakReference<TextView> source;
         final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
         @Override public void draw(Canvas c) {
-            Rect b=getBounds(); float u=b.width()/156f;
-            p.setColor(dark?0xff172b40:0xffe5f1f7);
-            c.drawRoundRect(new RectF(b),10*u,10*u,p);
-            p.setTextAlign(Paint.Align.CENTER); p.setTypeface(Typeface.DEFAULT); p.setTextSize(12*u);
-            p.setColor(dark?Color.WHITE:0xff172b40);
-            c.drawText(thai?"แบตตามเส้นทาง":"Route battery",b.exactCenterX(),b.top+16*u,p);
-            p.setTypeface(Typeface.DEFAULT_BOLD); p.setTextSize(32*u);
-            if(soc<0) p.setColor(dark?0xffff8888:0xffb91c1c);
-            c.drawText(soc+"%",b.exactCenterX(),b.top+49*u,p);
-            p.setTypeface(Typeface.DEFAULT); p.setTextSize(11*u);
-            if(soc<0) c.drawText(thai?"ต้องชาร์จ":"Charge required",b.exactCenterX(),b.top+63*u,p);
-            float l=b.left+12*u,r=b.right-12*u,t=b.bottom-12*u;
-            p.setColor(dark?0xff485461:0xffc2ced8); c.drawRoundRect(l,t,r,t+5*u,2*u,2*u,p);
-            p.setColor(soc<20?0xffef4444:soc<35?0xffd97706:0xff179b64);
-            if(soc>0)c.drawRoundRect(l,t,l+(r-l)*NatSignedSoc.bar(soc)/100f,t+5*u,2*u,2*u,p);
+            Rect b=getBounds(); float u=b.width()/160f;
+            int fg=dark?0xfff5f5f5:0xff263238;
+            int accent=soc<20?0xffdc4040:soc<35?0xffd97706:0xff179b64;
+            p.setStyle(Paint.Style.FILL); p.setColor(dark?0xff172b40:0xffe5f1f7);
+            c.drawRoundRect(new RectF(b),9*u,9*u,p);
+            p.setTextAlign(Paint.Align.LEFT); p.setTypeface(Typeface.DEFAULT); p.setTextSize(12*u); p.setColor(fg);
+            c.drawText(thai?"แบตเมื่อถึง":"Arrival battery",b.left+10*u,b.top+16*u,p);
+            p.setColor(soc<0?(dark?0xffff8888:0xffb91c1c):fg);
+            p.setTypeface(Typeface.DEFAULT_BOLD); p.setTextSize(36*u);
+            String number=soc+"%";
+            float max=b.width()-20*u;
+            if(p.measureText(number)>max) p.setTextSize(p.getTextSize()*max/p.measureText(number));
+            c.drawText(number,b.left+10*u,b.top+53*u,p);
+            float l=b.left+10*u,r=b.right-15*u,t=b.bottom-15*u,bot=b.bottom-7*u;
+            p.setColor(dark?0xff485461:0xffb9cbd4); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1.2f*u);
+            c.drawRoundRect(l,t,r,bot,2*u,2*u,p);
+            p.setStyle(Paint.Style.FILL); c.drawRoundRect(r+2*u,t+2*u,r+5*u,bot-2*u,u,u,p);
+            int fill=NatSignedSoc.bar(soc); p.setColor(accent);
+            if(fill>0) c.drawRoundRect(l+2*u,t+2*u,l+2*u+(r-l-4*u)*fill/100f,bot-2*u,u,u,p);
+            if(soc<0) { p.setTextSize(10*u);p.setColor(dark?0xffff8888:0xffb91c1c); c.drawText(thai?"ต้องชาร์จ":"Charge required",b.left+10*u,b.top+63*u,p); }
         }
         @Override public void setAlpha(int a) { }
         @Override public void setColorFilter(ColorFilter f) { }
