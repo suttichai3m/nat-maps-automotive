@@ -1,0 +1,2 @@
+# V3.1 adaptive source — not final
+Native inline card now adapts to available width instead of rejecting all widths below the preferred card size. It still refuses very narrow layouts and does not overlay controls. No destination identity hook, charging-stop correlation or verified full-size card. Existing theme and Send to Car retained; runtime unverified. Android compilation not performed (SDK unavailable). Existing pure Java tests do not exercise the new Android UI. Do not treat as final or deploy as a verified release.

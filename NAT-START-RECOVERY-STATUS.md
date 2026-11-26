@@ -1,0 +1,1 @@
+Start recovery candidate: watches native navigation summary changes, accepts duplicate identical SOC, searches alternate fixed-size positions. No verified Start event hook; ambiguous SOC or no safe position hides card. Android compilation/runtime not tested. 46 JVM cases passed.

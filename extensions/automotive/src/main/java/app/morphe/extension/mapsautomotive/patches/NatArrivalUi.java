@@ -69,10 +69,12 @@ public final class NatArrivalUi {
         private final boolean thai;
         private final String comparison;
         private final boolean navigation;
-        NatSize(int value, boolean dark, boolean thai, String comparison, boolean navigation) { this.navigation = navigation; this.value = value; this.dark = dark; this.thai = thai; this.comparison = comparison; }
+        private final float maxWidth;
+        NatSize(int value, boolean dark, boolean thai, String comparison, boolean navigation, float maxWidth) { this.maxWidth = maxWidth; this.navigation = navigation; this.value = value; this.dark = dark; this.thai = thai; this.comparison = comparison; }
         private Paint numberPaint(Paint original) {
             Paint p = new Paint(original);
-            p.setTextSize(original.getTextSize() * (navigation ? 1.8f : 2.0f));
+            p.setTextSize(original.getTextSize() * (navigation ? 2.5f : 2.0f));
+            if (maxWidth > 0) { float measured = p.measureText(value + "%"); if (measured > maxWidth - original.getTextSize()) p.setTextSize(p.getTextSize() * Math.max(.1f, (maxWidth - original.getTextSize()) / measured)); }
             p.setTypeface(Typeface.create(original.getTypeface(), Typeface.BOLD));
             p.setColor(value < 0 ? (dark ? 0xffff8888 : 0xffb91c1c) : (dark ? 0xffffffff : 0xff111111));
             return p;
@@ -86,24 +88,25 @@ public final class NatArrivalUi {
                 fm.top = Math.min(fm.top, fm.ascent);
                 fm.bottom = Math.max(fm.bottom, fm.descent);
             }
-            return (int)Math.ceil(Math.max(u * 5.2f, p.measureText(text, start, end) + u));
+            return (int)Math.ceil(Math.min(maxWidth > 0 ? maxWidth : Float.MAX_VALUE, Math.max(u * (navigation ? 7.5f : 5.2f), p.measureText(text, start, end) + u)));
         }
         @Override public void draw(Canvas c, CharSequence text, int start, int end, float x, int top, int y, int bottom, Paint paint) {
             float u = paint.getTextSize(), w = getSize(paint, text, start, end, null);
             Paint p = numberPaint(paint), shape = new Paint(Paint.ANTI_ALIAS_FLAG);
             float t = y + p.ascent() - u * 1.1f, b = y + p.descent() + u * (comparison.isEmpty() ? .6f : 1.6f);
-            shape.setColor(dark ? 0xff080808 : 0xffffffff);
+            shape.setColor(dark ? 0xff123c60 : 0xffeaf3ff);
             c.drawRoundRect(new RectF(x, t, x+w, b), u*.35f, u*.35f, shape);
             Paint label = new Paint(p);
             label.setTextSize(u * .72f);
-            String caption = thai ? "แบตเมื่อถึง" : "Arrival battery";
+            String caption = navigation ? (thai ? "แบตตามเส้นทาง" : "Route battery") : (thai ? "แบตเมื่อถึง" : "Arrival battery");
+            if (label.measureText(caption) > w-u*.4f) label.setTextSize(label.getTextSize() * (w-u*.4f)/label.measureText(caption));
             c.drawText(caption, x+(w-label.measureText(caption))/2f, t+u*.85f, label);
             c.drawText(text, start, end, x+(w-p.measureText(text,start,end))/2f, y, p);
             if (!comparison.isEmpty()) { label.setTextSize(u*.7f); c.drawText(comparison, x+(w-label.measureText(comparison))/2f, b-u*.65f, label); }
-            float l=x+u*.4f, r=x+w-u*.4f, bt=b-u*.2f, h=u*.22f;
-            shape.setColor(dark ? 0xff353535 : 0xffdddddd);
+            float l=x+u*.4f, r=x+w-u*.4f, bt=b-u*.2f, h=u*.35f;
+            shape.setColor(dark ? 0xff365c7c : 0xffb9cce3);
             c.drawRoundRect(new RectF(l,bt-h,r,bt),h/2,h/2,shape);
-            shape.setColor(value < 20 ? 0xffef4444 : value < 35 ? 0xffd97706 : 0xff179b64);
+            shape.setColor(value < 20 ? 0xffef4444 : value < 35 ? 0xffd97706 : 0xff16c832);
             if(value > 0) c.drawRoundRect(new RectF(l,bt-h,l+(r-l)*NatSignedSoc.bar(value)/100f,bt),h/2,h/2,shape);
         }
     }
@@ -111,7 +114,7 @@ public final class NatArrivalUi {
     private static final WeakHashMap<TextView, Boolean> WATCHED = new WeakHashMap<>();
     public static void install(Activity activity) {
         if (activity == null || INSTALLED.put(activity, true) != null) return;
-        ReportLog.i("NatArrivalUi", "V3.1 alpha2.1 hook installed");
+        ReportLog.i("NatArrivalUi", "V3.1 battery-first hook installed");
         WeakReference<Activity> ref = new WeakReference<>(activity);
         MAIN.postDelayed(new Runnable() {
             @Override public void run() {
@@ -147,7 +150,7 @@ public final class NatArrivalUi {
                     queued = false;
                     View v = r.get(); Activity owner = a.get();
                     if (v == null || owner == null || owner.isDestroyed() || !owner.hasWindowFocus() || !SafeMode.on(owner, SafeMode.BYD_BATTERY)) return;
-                    try { NatNavigationCard.clear(v); } catch (RuntimeException ignored) { }
+                    try { NatNavigationCard.refresh(v); } catch (RuntimeException ignored) { }
                 });
             }
         });
@@ -165,7 +168,7 @@ public final class NatArrivalUi {
                     queued = false;
                     TextView v = ref.get();
                     if (v == null || !v.isShown() || !v.hasWindowFocus() || !SafeMode.on(v.getContext(), SafeMode.BYD_BATTERY)) return;
-                    try { scan(v, 0); } catch (RuntimeException ignored) { }
+                    try { scan(v, 0); NatNavigationCard.refresh(v.getRootView()); } catch (RuntimeException ignored) { }
                 });
             }
             public void afterTextChanged(Editable e) { }
@@ -180,6 +183,8 @@ public final class NatArrivalUi {
             if (text == null) return;
             Matcher nav = NAV.matcher(text.toString().replace("\u00a0", " "));
             boolean navigation = nav.matches();
+            // Active navigation is rendered by the independent card, not a shrinking span.
+            if (navigation || NatNavigationSummary.hasRoute(text)) { watch(tv); return; }
             Matcher m = navigation ? nav : ARRIVAL.matcher(text);
             if (!m.matches()) {
                 m = PERCENT.matcher(text);
@@ -200,18 +205,27 @@ public final class NatArrivalUi {
             boolean thai = "th".equals(tv.getResources().getConfiguration().getLocales().get(0).getLanguage()) || Pattern.compile("[\\u0E00-\\u0E7F]").matcher(text).find();
             if (value < 0) comparison = thai ? "ต้องชาร์จ" : "Charge required";
             boolean dark = ColorScheme.nightColors(tv.getContext());
-            if (navigation) return; // Keep native navigation text and layout intact.
+            // Active navigation uses the native summary span, not a floating overlay.
+            if (navigation && NatNavigationSummary.parse(text) == null) return;
             if (text instanceof Spanned) {
                 NatSize[] existing = ((Spanned) text).getSpans(0, text.length(), NatSize.class);
                 if (existing.length == 1 && existing[0].value == value && existing[0].dark == dark && existing[0].navigation == navigation && existing[0].comparison.equals(comparison)) return;
             }
+            float maxWidth = 0;
+            if (navigation) {
+                int available = tv.getWidth() - tv.getCompoundPaddingLeft() - tv.getCompoundPaddingRight();
+                float other = tv.getPaint().measureText(text.subSequence(0, m.start(1)).toString())
+                        + tv.getPaint().measureText(text.subSequence(m.end(1), text.length()).toString());
+                maxWidth = available - other - 2;
+                if (maxWidth < tv.getTextSize() * 3f) return;
+            }
             SpannableString styled = new SpannableString(text);
             for (NatSize old : styled.getSpans(0, styled.length(), NatSize.class)) styled.removeSpan(old);
-            styled.setSpan(new NatSize(value, dark, thai, comparison, navigation), m.start(1), m.end(1), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            styled.setSpan(new NatSize(value, dark, thai, comparison, navigation, maxWidth), m.start(1), m.end(1), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
 
             tv.setText(styled);
 
-            ReportLog.i("NatArrivalUi", "V3.1 alpha2.1 arrival span applied");
+            ReportLog.i("NatArrivalUi", "V3.1 battery-first native span applied");
         } else if (view instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) view;
             for (int i = 0; i < group.getChildCount(); i++) scan(group.getChildAt(i), depth + 1);
