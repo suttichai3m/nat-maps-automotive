@@ -14,6 +14,10 @@ final class NatNavigationCard {
         Card c = CARDS.remove(root);
         if (c != null) root.getOverlay().remove(c);
     }
+    static void invalidateForecast(View root) {
+        Card c = CARDS.get(root);
+        if (c != null && c.soc != null) { c.soc = null; c.invalidateSelf(); }
+    }
     private static void find(View v, java.util.List<TextView> matches, int depth) {
         if (depth > 40 || !v.isShown()) return;
         if (v instanceof TextView && !(v instanceof android.widget.EditText)) {
@@ -26,7 +30,7 @@ final class NatNavigationCard {
     static void refresh(View root) {
         java.util.ArrayList<TextView> matches = new java.util.ArrayList<>();
         find(root,matches,0);
-        if (matches.isEmpty()) { clear(root); return; }
+        if (matches.isEmpty()) { pending(root); return; }
         TextView tv=matches.get(0);
         Integer soc=NatNavigationSummary.parse(tv.getText());
 
@@ -34,7 +38,7 @@ final class NatNavigationCard {
             if (!java.util.Objects.equals(soc,NatNavigationSummary.parse(match.getText()))) soc=null;
         }
         Rect visible=new Rect();
-        if (!tv.getGlobalVisibleRect(visible)) { clear(root); return; }
+        if (!tv.getGlobalVisibleRect(visible)) { pending(root); return; }
         int[] origin=new int[2]; root.getLocationOnScreen(origin);
         int[] pos=new int[2]; tv.getLocationOnScreen(pos);
         float d=root.getResources().getDisplayMetrics().density;
@@ -54,7 +58,36 @@ final class NatNavigationCard {
         boolean dark=ColorScheme.nightColors(tv.getContext());
         Card c=CARDS.get(root);
         if(c==null) { c=new Card(); CARDS.put(root,c); root.getOverlay().add(c); }
-        c.soc=soc; c.thai=thai; c.dark=dark; c.setBounds(x,y,x+w,y+h); c.invalidateSelf();
+        c.lastSeen=android.os.SystemClock.elapsedRealtime();
+        c.expiryQueued=false;
+        boolean changed=!java.util.Objects.equals(c.soc,soc) || c.thai!=thai || c.dark!=dark;
+        c.soc=soc; c.thai=thai; c.dark=dark;
+        if (!c.getBounds().equals(chosen)) c.setBounds(chosen);
+        if (changed) c.invalidateSelf();
+    }
+    // Brief layout transitions may hide the native summary. Never retain stale SOC.
+    private static void pending(View root) {
+        Card c=CARDS.get(root);
+        if(c==null) return;
+        if(!NatCardContinuity.keep(android.os.SystemClock.elapsedRealtime()-c.lastSeen)
+                || c.getBounds().right>root.getWidth() || c.getBounds().bottom>root.getHeight()) {
+            clear(root); return;
+        }
+        int[] origin=new int[2]; root.getLocationOnScreen(origin);
+        Rect target=new Rect(c.getBounds()); target.offset(origin[0],origin[1]);
+        if(obstructs(root,target,null,0)) { clear(root); return; }
+        if (!c.expiryQueued) {
+            c.expiryQueued = true;
+            java.lang.ref.WeakReference<View> ref = new java.lang.ref.WeakReference<>(root);
+            long seen = c.lastSeen;
+            root.postDelayed(() -> {
+                View v = ref.get();
+                if (v != null && CARDS.get(v) == c && c.lastSeen == seen
+                        && !NatCardContinuity.keep(android.os.SystemClock.elapsedRealtime()-seen)) clear(v);
+            }, Math.max(1, 2501-(android.os.SystemClock.elapsedRealtime()-seen)));
+        }
+        boolean dark=ColorScheme.nightColors(root.getContext());
+        if(c.soc!=null || c.dark!=dark) { c.soc=null; c.dark=dark; c.invalidateSelf(); }
     }
     // Never cover visible text or actionable leaf controls.
     private static boolean obstructs(View v, Rect target, View anchor, int depth) {
@@ -69,7 +102,7 @@ final class NatNavigationCard {
         return false;
     }
     private static final class Card extends Drawable {
-        Integer soc; boolean thai,dark;
+        Integer soc; boolean thai,dark,expiryQueued; long lastSeen;
         final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
         @Override public void draw(Canvas c) {
             Rect b=getBounds(); float u=b.width()/220f;

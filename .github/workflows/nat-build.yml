@@ -1,4 +1,4 @@
-name: NAT V3.1 Fixed Battery Card build
+name: NAT V3.1 lightweight continuity candidate build
 on:
   workflow_dispatch:
 permissions:
@@ -24,6 +24,8 @@ jobs:
         run: bash scripts/test-navigation-summary.sh
       - name: Theme schedule tests
         run: bash scripts/test-theme-schedule.sh
+      - name: Card placement and continuity tests
+        run: bash scripts/test-card-placement.sh && bash scripts/test-card-continuity.sh
       - name: Build patch
         env:
           GITHUB_ACTOR: ${{ github.actor }}
@@ -33,6 +35,6 @@ jobs:
           bash gradlew --no-daemon buildAndroid
       - uses: actions/upload-artifact@v4
         with:
-          name: NAT-V3.1-fixed-card-mpp
+          name: NAT-V3.1-lightweight-continuity-mpp
           path: patches/build/libs/*.mpp
           if-no-files-found: error

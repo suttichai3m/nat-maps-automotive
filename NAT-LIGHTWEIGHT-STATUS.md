@@ -1,0 +1,2 @@
+# Lightweight candidate (experimental)
+Based on audited candidate, not the installed Build09 binary. Foreground fallback scan 4s instead of 1s, unfocused 10s; layout and text callbacks coalesced separately at 250ms. Avoid unchanged card redraw and remove unused route distance parsing. Existing UI heuristics remain; no verified native navigation hooks. Continuity timeout may be observed later than 2.5s if no event arrives. No GPS or theme controller changes. Five pure Java test scripts passed (52 cases); Android build, runtime and resource measurements pending. Not final.

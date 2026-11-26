@@ -29,13 +29,6 @@ public final class NatArrivalUi {
     private static final Pattern PERCENT = Pattern.compile("(?<![0-9+−-])([+−-]?[0-9]{1,3}\\s*[%％])");
     private static final Pattern DISTANCE = Pattern.compile("(?iu)[0-9]+(?:[.,][0-9]+)?\\s*(?:กม\\.?|km|mi|เมตร|m\\b)");
     private static final Pattern TIME = Pattern.compile("(?iu)(?:[0-9]{1,2}:[0-9]{2}|[0-9]+\\s*(?:นาที|ชม\\.?|min|hr|hours?))");
-    private static double routeKm(CharSequence text) {
-        Matcher m=Pattern.compile("(?iu)([0-9]+(?:[.,][0-9]+)?)\\s*(?:กม\\.?|km)").matcher(text);
-        if(!m.find()) return Double.NaN;
-        String number=m.group(1);
-        if(m.find()) return Double.NaN;
-        try { return Double.parseDouble(number.replace(',','.')); } catch(NumberFormatException e) { return Double.NaN; }
-    }
     private static final Pattern NAV = Pattern.compile("(?iu)^\\s*[0-9]+(?:[.,][0-9]+)?\\s*(?:กม\\.?|km|mi|เมตร|m)\\s*[·•・]\\s*[0-9]{1,2}:[0-9]{2}(?:\\s*(?:น\\.?|AM|PM))?\\s*[·•・]\\s*([+−-]?[0-9]{1,3}\\s*[%％])(?:\\s|\\uFFFC|\\u200E|\\u200F)*$");
     private static boolean routeSummary(CharSequence text) {
         return DISTANCE.matcher(text).find() && TIME.matcher(text).find();
@@ -124,52 +117,57 @@ public final class NatArrivalUi {
                     View root = a.getWindow().peekDecorView();
                     if (root != null && a.hasWindowFocus() && SafeMode.on(a, SafeMode.BYD_BATTERY)) {
                         attach(root, a);
-                        scan(root, 0);
-                        NatNavigationCard.refresh(root);
+                        requestRefresh(root);
                     } else if (root != null) { NatNavigationCard.clear(root); }
                 } catch (RuntimeException error) {
                     View root = a.getWindow().peekDecorView();
                     if (root != null) NatNavigationCard.clear(root);
                     ReportLog.w("NatArrivalUi", "Scan failed", error);
                 }
-                MAIN.postDelayed(this, 1000);
+                MAIN.postDelayed(this, a.hasWindowFocus() ? 4000 : 10000);
             }
         }, 1000);
     }
     private static final WeakHashMap<View, Boolean> ROOTS = new WeakHashMap<>();
+    private static final WeakHashMap<View, Boolean> QUEUED = new WeakHashMap<>();
+    private static void requestRefresh(View root) {
+        if (QUEUED.put(root, true) != null) return;
+        WeakReference<View> ref = new WeakReference<>(root);
+        MAIN.postDelayed(() -> {
+            View v = ref.get();
+            if (v == null) return;
+            QUEUED.remove(v);
+            if (!v.isAttachedToWindow() || !v.hasWindowFocus() || !SafeMode.on(v.getContext(), SafeMode.BYD_BATTERY)) {
+                NatNavigationCard.clear(v); return;
+            }
+            try { scan(v, 0); NatNavigationCard.refresh(v); }
+            catch (RuntimeException error) { NatNavigationCard.clear(v); }
+        }, 250);
+    }
     private static void attach(View root, Activity activity) {
         if (ROOTS.put(root, true) != null) return;
         WeakReference<View> r = new WeakReference<>(root);
-        WeakReference<Activity> a = new WeakReference<>(activity);
-        root.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
-            boolean queued;
-            @Override public void onGlobalLayout() {
-                if (queued) return;
-                queued = true;
-                MAIN.post(() -> {
-                    queued = false;
-                    View v = r.get(); Activity owner = a.get();
-                    if (v == null || owner == null || owner.isDestroyed() || !owner.hasWindowFocus() || !SafeMode.on(owner, SafeMode.BYD_BATTERY)) return;
-                    try { NatNavigationCard.refresh(v); } catch (RuntimeException ignored) { }
-                });
-            }
+        root.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+            View v = r.get();
+            if (v != null && v.hasWindowFocus()) requestRefresh(v);
+        });
+        root.getViewTreeObserver().addOnWindowFocusChangeListener(focused -> {
+            View v = r.get();
+            if (v == null) return;
+            if (focused) requestRefresh(v); else NatNavigationCard.clear(v);
         });
     }
     private static void watch(TextView tv) {
         if (WATCHED.put(tv, true) != null) return;
         WeakReference<TextView> ref = new WeakReference<>(tv);
         tv.addTextChangedListener(new TextWatcher() {
-            boolean queued;
             public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
             public void onTextChanged(CharSequence s, int start, int before, int count) {
-                if (queued) return;
-                queued = true;
-                MAIN.post(() -> {
-                    queued = false;
-                    TextView v = ref.get();
-                    if (v == null || !v.isShown() || !v.hasWindowFocus() || !SafeMode.on(v.getContext(), SafeMode.BYD_BATTERY)) return;
-                    try { scan(v, 0); NatNavigationCard.refresh(v.getRootView()); } catch (RuntimeException ignored) { }
-                });
+                TextView v = ref.get();
+                if (v == null || !v.hasWindowFocus()) return;
+                View root = v.getRootView();
+                NatNavigationCard.invalidateForecast(root);
+                requestRefresh(root);
             }
             public void afterTextChanged(Editable e) { }
         });
@@ -199,7 +197,7 @@ public final class NatArrivalUi {
             if (parsed == null) return;
             int value = parsed;
             watch(tv);
-            double km = routeKm(text);
+
             String comparison = ""; // No verified route identity: do not mix independent forecast with native UI.
 
             boolean thai = "th".equals(tv.getResources().getConfiguration().getLocales().get(0).getLanguage()) || Pattern.compile("[\\u0E00-\\u0E7F]").matcher(text).find();
