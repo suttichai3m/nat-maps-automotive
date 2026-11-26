@@ -1,0 +1,52 @@
+name: NAT Automatic APK Analyzer V1
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Private release tag containing input.apk
+        required: true
+        default: nat-analysis-input
+permissions:
+  contents: read
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Download private APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          mkdir -p input report
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern input.apk --dir input -- "$INPUT_TAG"
+          sha256sum input/input.apk > report/apk-sha256.txt
+          unzip -tq input/input.apk
+      - name: Install analyzer on runner
+        run: |
+          curl -fL --retry 3 https://github.com/skylot/jadx/releases/download/v1.5.2/jadx-1.5.2.zip -o /tmp/jadx.zip
+          unzip -q /tmp/jadx.zip -d /tmp/jadx
+          chmod +x /tmp/jadx/bin/jadx
+          /tmp/jadx/bin/jadx --version
+      - name: Decompile and collect candidates
+        run: |
+          set +e
+          /tmp/jadx/bin/jadx --no-res --threads-count 2 -d decoded input/input.apk > report/jadx.log 2>&1
+          rc=$?
+          set -e
+          echo "$rc" > report/jadx-exit-code.txt
+          test -d decoded/sources
+          python3 scripts/nat-hook-report.py decoded/sources report
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NAT-Hook-Analysis-Report
+          path: report/
+          retention-days: 3
+          if-no-files-found: error
