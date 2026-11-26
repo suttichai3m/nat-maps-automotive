@@ -13,5 +13,18 @@ final class NatNavigationSummary {
         String t=normalize(text);
         return hasRoute(t) || hasRoute(t.replaceAll("(?iu)(กม\\.?|km|mi|เมตร|m)\\s+(?=[0-9]{1,2}:)", "$1 · ").replaceAll("(?iu)([0-9]{1,2}:[0-9]{2}(?:\\s*(?:น\\.?|AM|PM))?)\\s+(?=[+−-]?[0-9]{1,3}\\s*[%％])", "$1 · "));
     }
+    // Accept a bounded local summary with duration before distance, or separate rows.
+    static Integer localSoc(CharSequence text) {
+        if (text == null) return null;
+        String t = normalize(text);
+        if (t.length() > 180) return null;
+        Matcher pct = Pattern.compile("(?<![0-9+−-])([+−-]?[0-9]{1,3}\\s*[%％])").matcher(t);
+        if (!pct.find()) return null;
+        Integer value = NatSignedSoc.parse(pct.group(1));
+        if (pct.find()) return null;
+        if (!Pattern.compile("(?iu)[0-9]+(?:[.,][0-9]+)?\\s*(?:กม\\.?|km\\b|mi\\b|เมตร|m\\b)").matcher(t).find()) return null;
+        if (!Pattern.compile("[0-9]{1,2}:[0-9]{2}").matcher(t).find()) return null;
+        return value;
+    }
     static Integer parse(CharSequence text) { if(text==null)return null; Matcher m=NAV.matcher(normalize(text)); return m.matches()?NatSignedSoc.parse(m.group(1)):null; }
 }

@@ -26,6 +26,7 @@ final class NatNavigationCard {
     private static Integer readSoc(CharSequence text) {
         if(text==null) return null;
         Integer value=NatNavigationSummary.parse(text);
+        if(value==null) value=NatNavigationSummary.localSoc(text);
         return value!=null?value:NatSignedSoc.parse(NatNavigationSummary.normalize(text));
     }
     static void refresh(View root, java.util.List<TextView> matches) {

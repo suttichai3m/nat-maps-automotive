@@ -14,7 +14,10 @@ class TestNav {
  if(!NatNavigationSummary.splitRoute("12 km 10:30 AM 31%")) throw new AssertionError("split English");
  if(NatNavigationSummary.splitRoute("741 กม. 06:06 น. -49% 71%")) throw new AssertionError("ambiguous");
  if(!java.util.Objects.equals(-49,NatNavigationSummary.parse("741 กม. · 06:06 น. · \u200e-49%\uFFFC"))) throw new AssertionError("format markers");
- System.out.println("PASS: 13 navigation summary cases");
+ if (!java.util.Objects.equals(-49,NatNavigationSummary.localSoc("10 ชม. 59 นาที 741 กม. · 06:06 น. · -49%"))) throw new AssertionError("duration prefix");
+ if (NatNavigationSummary.localSoc("741 กม. 06:06 น. -49% 71%")!=null) throw new AssertionError("ambiguous local");
+ if (NatNavigationSummary.localSoc("71%")!=null) throw new AssertionError("standalone");
+ System.out.println("PASS: 16 navigation summary cases");
  }
 }
 JAVA

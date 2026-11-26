@@ -187,14 +187,17 @@ public final class NatArrivalUi {
             for (int i=0;i<group.getChildCount();i++) collectSplitSummary(group.getChildAt(i),depth+1,matches);
         } else if (view instanceof TextView && !(view instanceof android.widget.EditText)) {
             TextView tv=(TextView)view;
-            if (tv.getText()==null || NatSignedSoc.parse(NatNavigationSummary.normalize(tv.getText()))==null) return;
+            if (tv.getText()==null) return;
+            Integer own = NatSignedSoc.parse(NatNavigationSummary.normalize(tv.getText()));
+            if (own == null) own = NatNavigationSummary.localSoc(tv.getText());
+            if (own == null) return;
             android.view.ViewParent parent=tv.getParent();
             for(int i=0;i<2 && parent instanceof ViewGroup;i++,parent=parent.getParent()) {
                 StringBuilder local=new StringBuilder(); collect((View)parent,local,0);
                 String text=NatNavigationSummary.normalize(local);
                 if(text.length()>180) continue;
                 Matcher m=PERCENT.matcher(text);
-                if(m.find() && !m.find() && NatNavigationSummary.splitRoute(text)) {
+                if(m.find() && !m.find() && java.util.Objects.equals(own, NatNavigationSummary.localSoc(text))) {
                     matches.add(tv); watch(tv); return;
                 }
             }
@@ -210,8 +213,8 @@ public final class NatArrivalUi {
             Matcher nav = NAV.matcher(text.toString().replace("\u00a0", " "));
             boolean navigation = nav.matches();
             // Active navigation is rendered by the independent card, not a shrinking span.
-            if (navigation || NatNavigationSummary.hasRoute(text)) {
-                if (NatNavigationSummary.hasRoute(text)) matches.add(tv);
+            if (navigation || NatNavigationSummary.hasRoute(text) || NatNavigationSummary.localSoc(text)!=null) {
+                if (NatNavigationSummary.hasRoute(text) || NatNavigationSummary.localSoc(text)!=null) matches.add(tv);
                 watch(tv); return;
             }
             Matcher m = navigation ? nav : ARRIVAL.matcher(text);

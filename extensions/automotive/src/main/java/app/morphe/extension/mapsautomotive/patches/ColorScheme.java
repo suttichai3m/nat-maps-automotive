@@ -615,6 +615,11 @@ public final class ColorScheme {
      * first night update). Our dialogs use it, so they match the map behind them (BYD keeps the system in night mode).
      */
     static boolean nightColors(Context context) {
+        if (SafeMode.on(context, SafeMode.COLOR_SCHEME)) {
+            String selected = choice();
+            if (DAY.equals(selected)) return false;
+            if (NIGHT.equals(selected)) return true;
+        }
         Boolean given = givenNight;
         if (given != null) return given;
         try {
