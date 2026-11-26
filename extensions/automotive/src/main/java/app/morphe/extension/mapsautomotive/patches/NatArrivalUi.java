@@ -143,6 +143,7 @@ public final class NatArrivalUi {
             try {
                 java.util.ArrayList<TextView> matches = new java.util.ArrayList<>();
                 scan(v, 0, matches);
+                if (matches.isEmpty()) collectSplitSummary(v, 0, matches);
                 NatNavigationCard.refresh(v, matches);
             }
             catch (RuntimeException error) { NatNavigationCard.clear(v); }
@@ -177,6 +178,27 @@ public final class NatArrivalUi {
             }
             public void afterTextChanged(Editable e) { }
         });
+    }
+    // Conservative fallback: require a unique SOC and distance/ETA in a small local group.
+    private static void collectSplitSummary(View view, int depth, java.util.List<TextView> matches) {
+        if (depth > 40 || !view.isShown()) return;
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i=0;i<group.getChildCount();i++) collectSplitSummary(group.getChildAt(i),depth+1,matches);
+        } else if (view instanceof TextView && !(view instanceof android.widget.EditText)) {
+            TextView tv=(TextView)view;
+            if (tv.getText()==null || NatSignedSoc.parse(NatNavigationSummary.normalize(tv.getText()))==null) return;
+            android.view.ViewParent parent=tv.getParent();
+            for(int i=0;i<2 && parent instanceof ViewGroup;i++,parent=parent.getParent()) {
+                StringBuilder local=new StringBuilder(); collect((View)parent,local,0);
+                String text=NatNavigationSummary.normalize(local);
+                if(text.length()>180) continue;
+                Matcher m=PERCENT.matcher(text);
+                if(m.find() && !m.find() && NatNavigationSummary.splitRoute(text)) {
+                    matches.add(tv); watch(tv); return;
+                }
+            }
+        }
     }
     private static void scan(View view, int depth, java.util.List<TextView> matches) {
         if (depth > 40 || !view.isShown()) return;

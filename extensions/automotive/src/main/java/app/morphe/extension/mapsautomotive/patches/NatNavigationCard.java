@@ -22,13 +22,19 @@ final class NatNavigationCard {
         Card c = CARDS.get(root);
         if (c != null && !java.util.Objects.equals(c.soc, soc)) invalidateForecast(root);
     }
+    private static Integer readSoc(TextView tv) { return readSoc(tv.getText()); }
+    private static Integer readSoc(CharSequence text) {
+        if(text==null) return null;
+        Integer value=NatNavigationSummary.parse(text);
+        return value!=null?value:NatSignedSoc.parse(NatNavigationSummary.normalize(text));
+    }
     static void refresh(View root, java.util.List<TextView> matches) {
         if (matches.isEmpty()) { pending(root); return; }
         TextView tv=matches.get(0);
-        Integer soc=NatNavigationSummary.parse(tv.getText());
+        Integer soc=readSoc(tv);
 
         for (TextView match : matches) {
-            if (!java.util.Objects.equals(soc,NatNavigationSummary.parse(match.getText()))) soc=null;
+            if (!java.util.Objects.equals(soc,readSoc(match.getText()))) soc=null;
         }
         Rect visible=new Rect();
         if (!tv.getGlobalVisibleRect(visible)) { pending(root); return; }
