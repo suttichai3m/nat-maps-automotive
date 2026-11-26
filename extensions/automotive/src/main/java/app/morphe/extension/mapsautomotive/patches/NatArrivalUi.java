@@ -36,6 +36,7 @@ public final class NatArrivalUi {
         if(m.find()) return Double.NaN;
         try { return Double.parseDouble(number.replace(',','.')); } catch(NumberFormatException e) { return Double.NaN; }
     }
+    private static final Pattern NAV = Pattern.compile("(?iu)^\\s*[0-9]+(?:[.,][0-9]+)?\\s*(?:กม\\.?|km|mi|เมตร|m)\\s*[·•・]\\s*[0-9]{1,2}:[0-9]{2}(?:\\s*(?:น\\.?|AM|PM))?\\s*[·•・]\\s*([0-9]{1,3}\\s*[%％])(?:\\s|\\uFFFC|\\u200E|\\u200F)*$");
     private static boolean routeSummary(CharSequence text) {
         return DISTANCE.matcher(text).find() && TIME.matcher(text).find();
     }
@@ -67,12 +68,13 @@ public final class NatArrivalUi {
         private final boolean dark;
         private final boolean thai;
         private final String comparison;
-        NatSize(int value, boolean dark, boolean thai, String comparison) { this.value = value; this.dark = dark; this.thai = thai; this.comparison = comparison; }
+        private final boolean navigation;
+        NatSize(int value, boolean dark, boolean thai, String comparison, boolean navigation) { this.navigation = navigation; this.value = value; this.dark = dark; this.thai = thai; this.comparison = comparison; }
         private Paint numberPaint(Paint original) {
             Paint p = new Paint(original);
-            p.setTextSize(original.getTextSize() * 2.0f);
+            p.setTextSize(original.getTextSize() * (navigation ? 1.8f : 2.0f));
             p.setTypeface(Typeface.create(original.getTypeface(), Typeface.BOLD));
-            p.setColor(dark ? 0xfff0f6ff : 0xff163f59);
+            p.setColor(dark ? 0xffffffff : 0xff111111);
             return p;
         }
         @Override public int getSize(Paint paint, CharSequence text, int start, int end, Paint.FontMetricsInt fm) {
@@ -90,7 +92,7 @@ public final class NatArrivalUi {
             float u = paint.getTextSize(), w = getSize(paint, text, start, end, null);
             Paint p = numberPaint(paint), shape = new Paint(Paint.ANTI_ALIAS_FLAG);
             float t = y + p.ascent() - u * 1.1f, b = y + p.descent() + u * (comparison.isEmpty() ? .6f : 1.6f);
-            shape.setColor(dark ? 0xff172b40 : 0xffe5f1f7);
+            shape.setColor(dark ? 0xff080808 : 0xffffffff);
             c.drawRoundRect(new RectF(x, t, x+w, b), u*.35f, u*.35f, shape);
             Paint label = new Paint(p);
             label.setTextSize(u * .72f);
@@ -99,7 +101,7 @@ public final class NatArrivalUi {
             c.drawText(text, start, end, x+(w-p.measureText(text,start,end))/2f, y, p);
             if (!comparison.isEmpty()) { label.setTextSize(u*.7f); c.drawText(comparison, x+(w-label.measureText(comparison))/2f, b-u*.65f, label); }
             float l=x+u*.4f, r=x+w-u*.4f, bt=b-u*.2f, h=u*.22f;
-            shape.setColor(dark ? 0xff34485b : 0xffc9dce5);
+            shape.setColor(dark ? 0xff353535 : 0xffdddddd);
             c.drawRoundRect(new RectF(l,bt-h,r,bt),h/2,h/2,shape);
             shape.setColor(value < 20 ? 0xffef4444 : value < 35 ? 0xffd97706 : 0xff179b64);
             if(value > 0) c.drawRoundRect(new RectF(l,bt-h,l+(r-l)*value/100f,bt),h/2,h/2,shape);
@@ -109,7 +111,7 @@ public final class NatArrivalUi {
     private static final WeakHashMap<TextView, Boolean> WATCHED = new WeakHashMap<>();
     public static void install(Activity activity) {
         if (activity == null || INSTALLED.put(activity, true) != null) return;
-        ReportLog.i("NatArrivalUi", "V2.4 hook installed");
+        ReportLog.i("NatArrivalUi", "V3.0 hook installed");
         WeakReference<Activity> ref = new WeakReference<>(activity);
         MAIN.postDelayed(new Runnable() {
             @Override public void run() {
@@ -171,7 +173,9 @@ public final class NatArrivalUi {
             if (tv instanceof android.widget.EditText || tv.isTextSelectable()) return;
             CharSequence text = tv.getText();
             if (text == null) return;
-            Matcher m = ARRIVAL.matcher(text);
+            Matcher nav = NAV.matcher(text.toString().replace("\u00a0", " "));
+            boolean navigation = nav.matches();
+            Matcher m = navigation ? nav : ARRIVAL.matcher(text);
             if (!m.matches()) {
                 m = PERCENT.matcher(text);
                 if (!m.find()) return;
@@ -185,18 +189,25 @@ public final class NatArrivalUi {
             if (value > 100) return;
             watch(tv);
             double km = routeKm(text);
-            String comparison = NatPrediction.comparison(tv.getContext(), value, km);
+            String comparison = navigation ? NatPrediction.navigationSummary(tv.getContext(), value, km) : NatPrediction.comparison(tv.getContext(), value, km);
             boolean thai = "th".equals(tv.getResources().getConfiguration().getLocales().get(0).getLanguage()) || Pattern.compile("[\\u0E00-\\u0E7F]").matcher(text).find();
-            boolean dark = (tv.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+            boolean dark = ColorScheme.nightColors(tv.getContext());
             if (text instanceof Spanned) {
                 NatSize[] existing = ((Spanned) text).getSpans(0, text.length(), NatSize.class);
-                if (existing.length == 1 && existing[0].value == value && existing[0].dark == dark && existing[0].comparison.equals(comparison)) return;
+                if (existing.length == 1 && existing[0].value == value && existing[0].dark == dark && existing[0].navigation == navigation && existing[0].comparison.equals(comparison)) return;
             }
             SpannableString styled = new SpannableString(text);
             for (NatSize old : styled.getSpans(0, styled.length(), NatSize.class)) styled.removeSpan(old);
-            styled.setSpan(new NatSize(value, dark, thai, comparison), m.start(1), m.end(1), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            styled.setSpan(new NatSize(value, dark, thai, comparison, navigation), m.start(1), m.end(1), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            if (navigation) {
+                tv.setSingleLine(false);
+                tv.setMaxLines(3);
+                tv.setEllipsize(null);
+                tv.setHorizontallyScrolling(false);
+            }
             tv.setText(styled);
-            ReportLog.i("NatArrivalUi", "V2.4 styled arrival percentage");
+            if (navigation) { tv.requestLayout(); ReportLog.i("NatArrivalUi", "V3.0 active navigation styled"); }
+            ReportLog.i("NatArrivalUi", "V3.0 styled arrival percentage");
         } else if (view instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) view;
             for (int i = 0; i < group.getChildCount(); i++) scan(group.getChildAt(i), depth + 1);

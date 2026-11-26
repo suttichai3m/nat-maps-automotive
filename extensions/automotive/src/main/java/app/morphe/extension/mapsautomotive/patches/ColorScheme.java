@@ -517,12 +517,17 @@ public final class ColorScheme {
             try {
                 WeakReference<Controller> current = controller;
                 Controller maps = current != null ? current.get() : null;
-                if (maps == null || !Utils.isContextSet()) return;
+                if (maps == null || !Utils.isContextSet()) {
+                    ReportLog.i(TAG, "V2.5 refresh unavailable: controller or context missing (" + reason + ")");
+                    return;
+                }
                 if (maps.morpheRefreshNight(liveConfiguration())) {
                     ReportLog.i(TAG, "Maps' screens refreshed for " + (Boolean.TRUE.equals(givenNight) ? "night" : "day")
                             + " colors (" + reason + ")");
                     // The refresh binds a Settings row again with the subtitle it was built with.
                     subtitleAfterRefresh();
+                } else {
+                    ReportLog.i(TAG, "V2.5 controller reported no color change (" + reason + ")");
                 }
             } catch (Throwable error) {
                 ReportLog.w(TAG, "Color refresh failed", error);

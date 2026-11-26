@@ -11,12 +11,25 @@ import java.util.Locale;
 final class NatPrediction {
     private static volatile Snapshot snapshot;
     private static final class Snapshot {
-        final long at; final double soc, capacity, km; final int google, charges;
-        Snapshot(double s,double c,double d,int g,int n) { at=SystemClock.elapsedRealtime(); soc=s; capacity=c; km=d; google=g; charges=n; }
+        final long at; final double soc, capacity, km; final int google, charges; final String plan; final int next; final double nextKm;
+        Snapshot(double s,double c,double d,int g,int n,String plan,int next,double nextKm) { at=SystemClock.elapsedRealtime(); soc=s; capacity=c; km=d; google=g; charges=n; this.plan=plan; this.next=next; this.nextKm=nextKm; }
     }
     static void capture(BydForecast.Forecast f, double soc, int capacityWh) {
         if (f.isEmpty() || !Double.isFinite(soc) || capacityWh <= 0 || f.finalArrivalWh()==BydForecast.NO_ENERGY) { snapshot=null; return; }
-        snapshot=new Snapshot(soc,capacityWh/1000.0,f.totalDistanceM()/1000.0,BydDisplayCurve.shown(f.finalArrivalWh(),capacityWh),f.chargeStops());
+        StringBuilder plan=new StringBuilder(); int i=0;
+        for(BydForecast.Stop stop:f.stops) if(stop.charging) {
+            plan.append("\nจุดชาร์จ ").append(++i).append(": ").append(stop.hasArrival?energyPercent(stop.arrivalWh,capacityWh):"?").append(" → ").append(stop.minDepartureWh>0?energyPercent(stop.minDepartureWh,capacityWh):"?").append(" (ขั้นต่ำ)");
+            if(stop.chargeTimeS>0) plan.append(" · ").append(Math.round(stop.chargeTimeS/60.0)).append(" นาที");
+        }
+        BydForecast.Stop first=f.stops.get(0);
+        snapshot=new Snapshot(soc,capacityWh/1000.0,f.totalDistanceM()/1000.0,BydDisplayCurve.shown(f.finalArrivalWh(),capacityWh),f.chargeStops(),plan.toString(),first.hasArrival?BydDisplayCurve.shown(first.arrivalWh,capacityWh):-1,first.distanceM/1000.0);
+    }
+    private static String energyPercent(int wh,int cap) { return wh<=0 ? fmt(wh*100.0/cap)+"%" : BydDisplayCurve.shown(wh,cap)+"%"; }
+    static String navigationSummary(android.content.Context context,int value,double km) {
+        Snapshot s=snapshot;
+        if(s==null || SystemClock.elapsedRealtime()-s.at>30000 || !BydBatteryPatch.isActive() || !Double.isFinite(km)) return "";
+        if(s.charges>0 && s.next==value && Math.abs(s.nextKm-km)<=Math.max(.2,km*.01) && s.google>=0) return "Final est. "+s.google+"%";
+        return "";
     }
     // Only compare a fresh, matching, no-charge forecast. Never replace Maps SOC.
     static String comparison(android.content.Context context, int google, double km) {
@@ -27,7 +40,7 @@ final class NatPrediction {
             double rate=Double.parseDouble(p.getString("rate","17").replace(',','.'));
             double cap=Double.parseDouble(p.getString("capacity",String.valueOf(s.capacity)).replace(',','.'));
             double n=NatPredictionMath.arrival(s.soc,s.km,rate,cap);
-            return n<0 ? "NAT est. <0%" : "NAT est. "+Math.round(n)+"%";
+            return n<0 ? "NAT est. "+Math.round(n)+"%" : "NAT est. "+Math.round(n)+"%";
         } catch(RuntimeException e) { return ""; }
     }
     private static EditText field(LinearLayout layout,String label,String value) {
@@ -40,7 +53,7 @@ final class NatPrediction {
         Snapshot s=snapshot;
         boolean live=s!=null && SystemClock.elapsedRealtime()-s.at<=30000 && BydBatteryPatch.isActive();
         LinearLayout l=new LinearLayout(a); l.setOrientation(LinearLayout.VERTICAL); int pad=(int)(20*a.getResources().getDisplayMetrics().density); l.setPadding(pad,pad,pad,pad);
-        TextView note=new TextView(a); note.setText(live?"ข้อมูลจาก forecast ล่าสุด ณ เวลาเปิดหน้าต่าง / ตรวจสอบเส้นทางก่อนใช้":"ไม่มี forecast สด — กรอกข้อมูลเอง (ไม่ใช่ข้อมูลสด)"); l.addView(note);
+        TextView note=new TextView(a); note.setText(live?"ข้อมูลจาก forecast ล่าสุด ณ เวลาเปิดหน้าต่าง / ตรวจสอบเส้นทางก่อนใช้":"ไม่มี forecast สด — กรอกข้อมูลเอง (ไม่ใช่ข้อมูลสด)"); l.addView(note); if(live && s.charges>0) { TextView plan=new TextView(a); plan.setText("แผนจาก Maps (ไม่มีชื่อสถานีใน forecast)"+s.plan+"\nปลายทาง: "+(s.google>=0?s.google+"%":"ไม่ทราบ")); l.addView(plan); }
         EditText soc=field(l,"แบตปัจจุบัน %",live?fmt(s.soc):"");
         EditText km=field(l,"ระยะทางคงเหลือ กม.",live?fmt(s.km):"");
         EditText cap=field(l,"ความจุใช้งาน kWh (ปรับได้)",p.getString("capacity",live?fmt(s.capacity):"82.56"));

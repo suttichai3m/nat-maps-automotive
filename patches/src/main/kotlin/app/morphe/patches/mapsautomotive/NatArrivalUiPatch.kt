@@ -7,8 +7,8 @@ private const val NAT_UI = "Lapp/morphe/extension/mapsautomotive/patches/NatArri
 
 @Suppress("unused")
 val natArrivalUiPatch = bytecodePatch(
-    name = "NAT arrival battery V2.4 experimental",
-    description = "Refresh-aware arrival card with Thai and English labels in native text views. Adds a separate NAT estimate only for matching fresh forecasts. Does not change the forecast.",
+    name = "NAT arrival battery V3.0 candidate",
+    description = "Active-navigation summary and refresh-aware arrival card with Thai and English labels in native text views. Adds a separate NAT estimate only for matching fresh forecasts. Does not change the forecast.",
     default = true,
 ) {
     compatibleWith(compatibility)

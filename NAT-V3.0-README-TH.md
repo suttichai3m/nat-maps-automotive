@@ -1,0 +1,4 @@
+# NAT V3.0 candidate (ยังไม่ผ่านการทดสอบบนรถ)
+ฐาน V2.5: เปลี่ยนสีการ์ดขาว/ดำตามธีม, แสดงค่าประมาณติดลบจริงใน comparison, อ่านแผนชาร์จจาก forecast เดิมในหน้าตั้งค่า NAT Smart EV Prediction และแสดง final estimate เมื่อข้อมูลช่วงแรกตรงกับหน้าจอและสดไม่เกิน 30 วินาที
+ยังใช้ native TextView span จึงไม่รับประกันการ์ดขนาดใหญ่บนหน้าหลัก; ไม่ได้แก้ controller สลับธีมของ Maps; ไม่มี API สถานีจริงหรือ adaptive learning ใหม่; ชื่อสถานีให้ดูใน Maps เดิม; ค่าเป้าชาร์จเป็นขั้นต่ำจาก forecast ไม่ใช่คำสั่งรถ
+Build: ใช้ branch ใหม่จาก main, แตก ZIP ที่ root repo (ไม่ทับ .git), commit/push, เปิด Actions NAT V3.0 integrated patch build, ดาวน์โหลด NAT-V3.0-integrated-mpp, ใช้ Morphe กับ APK ต้นฉบับ 26.10.120003.E, เลือก NAT arrival battery V3.0 candidate. เก็บ APK เดิมและ signing key. ยังไม่ควรติดตั้งเพื่อใช้งานจริงจนกว่าจะทดสอบขณะจอดรถ.
