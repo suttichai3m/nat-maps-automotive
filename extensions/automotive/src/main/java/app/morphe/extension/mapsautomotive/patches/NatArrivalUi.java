@@ -24,9 +24,9 @@ import java.util.regex.Pattern;
 
 /** Experimental: formats only an existing, explicitly labelled arrival percentage. */
 public final class NatArrivalUi {
-    private static final Pattern ARRIVAL = Pattern.compile("(?iu)^\\s*(?:Arrive with|Arrival battery|ไปถึงโดยเหลือ|แบตเมื่อถึง|แบตเตอรี่เมื่อถึง(?:ปลายทาง)?|แบตเมื่อไปถึง)\\s*([0-9]{1,3}\\s*[%％])\\s*$");
+    private static final Pattern ARRIVAL = Pattern.compile("(?iu)^\\s*(?:Arrive with|Arrival battery|ไปถึงโดยเหลือ|แบตเมื่อถึง|แบตเตอรี่เมื่อถึง(?:ปลายทาง)?|แบตเมื่อไปถึง)\\s*([+−-]?[0-9]{1,3}\\s*[%％])\\s*$");
     // Only accept an unlabelled percentage in a route summary containing distance and time.
-    private static final Pattern PERCENT = Pattern.compile("(?<![0-9])([0-9]{1,3}\\s*[%％])");
+    private static final Pattern PERCENT = Pattern.compile("(?<![0-9+−-])([+−-]?[0-9]{1,3}\\s*[%％])");
     private static final Pattern DISTANCE = Pattern.compile("(?iu)[0-9]+(?:[.,][0-9]+)?\\s*(?:กม\\.?|km|mi|เมตร|m\\b)");
     private static final Pattern TIME = Pattern.compile("(?iu)(?:[0-9]{1,2}:[0-9]{2}|[0-9]+\\s*(?:นาที|ชม\\.?|min|hr|hours?))");
     private static double routeKm(CharSequence text) {
@@ -36,7 +36,7 @@ public final class NatArrivalUi {
         if(m.find()) return Double.NaN;
         try { return Double.parseDouble(number.replace(',','.')); } catch(NumberFormatException e) { return Double.NaN; }
     }
-    private static final Pattern NAV = Pattern.compile("(?iu)^\\s*[0-9]+(?:[.,][0-9]+)?\\s*(?:กม\\.?|km|mi|เมตร|m)\\s*[·•・]\\s*[0-9]{1,2}:[0-9]{2}(?:\\s*(?:น\\.?|AM|PM))?\\s*[·•・]\\s*([0-9]{1,3}\\s*[%％])(?:\\s|\\uFFFC|\\u200E|\\u200F)*$");
+    private static final Pattern NAV = Pattern.compile("(?iu)^\\s*[0-9]+(?:[.,][0-9]+)?\\s*(?:กม\\.?|km|mi|เมตร|m)\\s*[·•・]\\s*[0-9]{1,2}:[0-9]{2}(?:\\s*(?:น\\.?|AM|PM))?\\s*[·•・]\\s*([+−-]?[0-9]{1,3}\\s*[%％])(?:\\s|\\uFFFC|\\u200E|\\u200F)*$");
     private static boolean routeSummary(CharSequence text) {
         return DISTANCE.matcher(text).find() && TIME.matcher(text).find();
     }
@@ -74,7 +74,7 @@ public final class NatArrivalUi {
             Paint p = new Paint(original);
             p.setTextSize(original.getTextSize() * (navigation ? 1.8f : 2.0f));
             p.setTypeface(Typeface.create(original.getTypeface(), Typeface.BOLD));
-            p.setColor(dark ? 0xffffffff : 0xff111111);
+            p.setColor(value < 0 ? (dark ? 0xffff8888 : 0xffb91c1c) : (dark ? 0xffffffff : 0xff111111));
             return p;
         }
         @Override public int getSize(Paint paint, CharSequence text, int start, int end, Paint.FontMetricsInt fm) {
@@ -104,14 +104,14 @@ public final class NatArrivalUi {
             shape.setColor(dark ? 0xff353535 : 0xffdddddd);
             c.drawRoundRect(new RectF(l,bt-h,r,bt),h/2,h/2,shape);
             shape.setColor(value < 20 ? 0xffef4444 : value < 35 ? 0xffd97706 : 0xff179b64);
-            if(value > 0) c.drawRoundRect(new RectF(l,bt-h,l+(r-l)*value/100f,bt),h/2,h/2,shape);
+            if(value > 0) c.drawRoundRect(new RectF(l,bt-h,l+(r-l)*NatSignedSoc.bar(value)/100f,bt),h/2,h/2,shape);
         }
     }
     private NatArrivalUi() {}
     private static final WeakHashMap<TextView, Boolean> WATCHED = new WeakHashMap<>();
     public static void install(Activity activity) {
         if (activity == null || INSTALLED.put(activity, true) != null) return;
-        ReportLog.i("NatArrivalUi", "V3.0 hook installed");
+        ReportLog.i("NatArrivalUi", "V3.1 alpha1 hook installed");
         WeakReference<Activity> ref = new WeakReference<>(activity);
         MAIN.postDelayed(new Runnable() {
             @Override public void run() {
@@ -183,13 +183,15 @@ public final class NatArrivalUi {
                 if (m.find()) return; // ambiguous: do not guess which battery value is arrival
                 m.reset();
                 if (!m.find() || m.start() != first) return;
-                if (!routeSummary(text) && !(text.toString().trim().matches("[0-9]{1,3}\\s*[%％]" ) && nearbyRoute(tv))) return;
+                if (!routeSummary(text) && !(text.toString().trim().matches("[+−-]?[0-9]{1,3}\\s*[%％]" ) && nearbyRoute(tv))) return;
             }
-            int value = Integer.parseInt(m.group(1).replaceAll("[^0-9]", ""));
-            if (value > 100) return;
+            Integer parsed = NatSignedSoc.parse(m.group(1));
+            if (parsed == null) return;
+            int value = parsed;
             watch(tv);
             double km = routeKm(text);
-            String comparison = navigation ? NatPrediction.navigationSummary(tv.getContext(), value, km) : NatPrediction.comparison(tv.getContext(), value, km);
+            String comparison = ""; // No verified route identity: do not mix independent forecast with native UI.
+            if (value < 0) comparison = "Charge required";
             boolean thai = "th".equals(tv.getResources().getConfiguration().getLocales().get(0).getLanguage()) || Pattern.compile("[\\u0E00-\\u0E7F]").matcher(text).find();
             boolean dark = ColorScheme.nightColors(tv.getContext());
             if (text instanceof Spanned) {
@@ -206,8 +208,8 @@ public final class NatArrivalUi {
                 tv.setHorizontallyScrolling(false);
             }
             tv.setText(styled);
-            if (navigation) { tv.requestLayout(); ReportLog.i("NatArrivalUi", "V3.0 active navigation styled"); }
-            ReportLog.i("NatArrivalUi", "V3.0 styled arrival percentage");
+            if (navigation) { tv.requestLayout(); ReportLog.i("NatArrivalUi", "V3.1 alpha1 active navigation span applied"); }
+            ReportLog.i("NatArrivalUi", "V3.1 alpha1 arrival span applied");
         } else if (view instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) view;
             for (int i = 0; i < group.getChildCount(); i++) scan(group.getChildAt(i), depth + 1);
