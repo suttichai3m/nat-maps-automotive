@@ -50,6 +50,18 @@ final class NatBatteryPlacement {
         for(int y:ys) for(int x:xs) unique(out,panel,x,y,w,h);
         return out;
     }
+    // Fixed right edge, aligned with the summary SOC row. No floating positions.
+    static List<Box> rightCell(Box panel, Box soc, int w, int h, int gap) {
+        List<Box> out = new ArrayList<>();
+        if (w <= 0 || h <= 0 || w > panel.w || h > panel.h) return out;
+        int x = panel.x + panel.w - w - Math.min(gap, panel.w - w);
+        int bottom = panel.y + panel.h - h;
+        int y = clamp(soc.y + soc.h / 2 - h / 2, panel.y, bottom);
+        unique(out, panel, x, y, w, h);
+        unique(out, panel, x, panel.y, w, h);
+        unique(out, panel, x, clamp(soc.y + soc.h - h, panel.y, bottom), w, h);
+        return out;
+    }
     // Adjacent to the summary only: no arbitrary map-corner placements.
     static List<Box> adjacent(Box viewport,Box panel,Box soc,int w,int h,int gap) {
         List<Box> out=new ArrayList<>();

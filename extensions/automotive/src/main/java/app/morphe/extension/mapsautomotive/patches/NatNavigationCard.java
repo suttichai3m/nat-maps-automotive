@@ -203,7 +203,8 @@ final class NatNavigationCard {
         if(!v.getGlobalVisibleRect(r) || !Rect.intersects(r,area)) return false;
         if(v==match.anchor && source!=null && !v.isClickable() && !v.isLongClickable() && !hasDrawable(match.anchor)) {
             if(source[1]!=null && Rect.intersects(source[1],area)) return true;
-            return Rect.intersects(source[0],area) && !area.contains(source[0]);
+            // The verified suffix will be hidden before this card is displayed.
+            return false;
         }
         if(v instanceof ViewGroup) {
             ViewGroup g=(ViewGroup)v;
@@ -237,42 +238,24 @@ final class NatNavigationCard {
         float d=root.getResources().getDisplayMetrics().density;
         int gap=Math.max(1,Math.round(4*d)); Rect area=null; int chosen=0; String placement="";
         Card existing=CARDS.get(root);
-        // Prioritize the right-hand cell INSIDE the same summary panel at all supported sizes.
-        // If a compact native layout has no room, only try directly adjacent to the panel.
-        for(int mode=0;mode<2 && area==null;mode++) {
-            if(mode==0 && !inside) continue;
-            Rect boundary=inside?panelRect:visible;
-            for(int size:new int[]{160,144,128}) {
+        // Keep a single right-aligned card inside the native summary. A verified
+        // suffix can share its cell; the distance/ETA prefix and controls cannot.
+        if (inside && regions != null && !hasDrawable(tv)) {
+            for (int size : new int[]{160,144,128,112}) {
                 int w=Math.round(size*d), h=Math.round(size*.50f*d);
-                List<NatBatteryPlacement.Box> candidates=mode==0
-                    ? NatBatteryPlacement.integrated(box(boundary),box(anchor),w,h,gap)
-                    : NatBatteryPlacement.adjacent(box(viewport),box(boundary),box(anchor),w,h,gap);
-                // Prefer replacing the complete small SOC in its existing cell, not duplicating it.
-                // If impossible, a nearby free cell still gives a readable value without hiding native text.
-                for(int pass=0;pass<2 && area==null;pass++) {
-                    if(pass==0 && (mode!=0 || regions==null)) continue;
-                    for(NatBatteryPlacement.Box b:candidates) {
-                        Rect candidate=new Rect(b.x,b.y,b.x+b.w,b.y+b.h);
-                        if(pass==0 && !candidate.contains(regions[0])) continue;
-                        if(!blocked(root,candidate,match,mode==0?regions:null,0)) { area=candidate; chosen=size; placement=mode==0?"integrated":"adjacent"; break; }
+                for (NatBatteryPlacement.Box cell : NatBatteryPlacement.rightCell(box(panelRect),box(anchor),w,h,gap)) {
+                    Rect candidate=new Rect(cell.x,cell.y,cell.x+cell.w,cell.y+cell.h);
+                    if (!blocked(root,candidate,match,regions,0)) {
+                        area=candidate; chosen=size; placement="integrated-right"; break;
                     }
                 }
-                if(area!=null) break;
+                if (area!=null) break;
             }
         }
-        if(area==null) { clear(root); status(root,"no safe summary space"); return; }
-        if(existing!=null && existing.placement.equals(placement) && existing.getBounds().width()==area.width() && existing.getBounds().height()==area.height()) {
-            Rect previous=new Rect(existing.getBounds()); previous.offset(offset.x,offset.y);
-            boolean isIntegrated=placement.equals("integrated");
-            boolean sameCoverage=regions==null || previous.contains(regions[0])==area.contains(regions[0]);
-            if(sameCoverage && viewport.contains(previous) && (!isIntegrated || panelRect.contains(previous))
-                && (isIntegrated || !Rect.intersects(previous,inside?panelRect:visible))
-                && !blocked(root,previous,match,isIntegrated?regions:null,0)) {
-                // Still anchored: accept only a candidate generated for the current layout, not an old map position.
-                List<NatBatteryPlacement.Box> allowed=isIntegrated?NatBatteryPlacement.integrated(box(panelRect),box(anchor),previous.width(),previous.height(),gap)
-                    :NatBatteryPlacement.adjacent(box(viewport),box(inside?panelRect:visible),box(anchor),previous.width(),previous.height(),gap);
-                for(NatBatteryPlacement.Box b:allowed) if(b.x==previous.left && b.y==previous.top) {area=previous; break;}
-            }
+        if (area==null) {
+            clear(root);
+            status(root,"no safe right cell; native SOC retained");
+            return;
         }
         area.offset(-offset.x,-offset.y);
         boolean thai="th".equals(tv.getResources().getConfiguration().getLocales().get(0).getLanguage()) || tv.getText().toString().matches("(?s).*[\\u0E00-\\u0E7F].*");
@@ -290,8 +273,14 @@ final class NatNavigationCard {
             if(start>0 && "·•・|".indexOf(nativeText.charAt(start-1))>=0) start--;
             hideNative(c,tv,start,regions[0].width());
         } else restoreNative(c);
-        status(root,"visible " + placement + " " + match.kind + " " + chosen + "dp"
-                + (c.hidden!=null?" native SOC hidden":" native SOC retained"));
+        // Fail closed: do not display a duplicate if the native suffix could not be hidden.
+        if (c.hidden==null || !(tv.getText() instanceof android.text.Spanned)
+                || ((android.text.Spanned)tv.getText()).getSpanStart(c.hidden)<0) {
+            clear(root);
+            status(root,"native suffix not hidden; native SOC retained");
+            return;
+        }
+        status(root,"visible " + placement + " " + match.kind + " " + chosen + "dp native SOC hidden");
         if(c.soc==soc && c.thai==thai && c.dark==dark && c.getBounds().equals(area)) return;
         c.soc=soc; c.thai=thai; c.dark=dark; c.setBounds(area); c.invalidateSelf();
     }
