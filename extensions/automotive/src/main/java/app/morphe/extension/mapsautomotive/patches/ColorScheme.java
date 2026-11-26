@@ -257,9 +257,7 @@ public final class ColorScheme {
 
     /** Whether [minute] (of the day) is in the night from [nightFrom] to [dayFrom], which may cross midnight. */
     static boolean nightAt(int minute, int nightFrom, int dayFrom) {
-        if (nightFrom == dayFrom) return false;
-        if (nightFrom < dayFrom) return minute >= nightFrom && minute < dayFrom;
-        return minute >= nightFrom || minute < dayFrom;
+        return NatThemeSchedule.nightAt(minute, nightFrom, dayFrom);
     }
 
     /** Milliseconds from [now] (wall clock) to {@link #CLOCK_MARGIN_MS} after the next minute starts. */
@@ -269,7 +267,7 @@ public final class ColorScheme {
 
     /** Night start and day start that Auto (time) can use: each a minute of the day, and not the same. */
     static boolean validTimes(int nightFrom, int dayFrom) {
-        return nightFrom >= 0 && nightFrom < MINUTES_PER_DAY && dayFrom >= 0 && dayFrom < MINUTES_PER_DAY && nightFrom != dayFrom;
+        return NatThemeSchedule.validTimes(nightFrom, dayFrom);
     }
 
     /** A minute of the day as HH:MM (24-hour). */
@@ -512,13 +510,21 @@ public final class ColorScheme {
      * Runs Maps' night mode update again on the main thread, so a new value applies at once; when the value
      * changed, Maps' screens are refreshed with it. [reason] is for the log.
      */
+    private static int refreshGeneration; // main thread only
+
     private static void refresh(String reason) {
-        mainHandler().post(() -> {
+        mainHandler().post(() -> refreshAttempt(reason, ++refreshGeneration, 0));
+    }
+
+    private static void refreshAttempt(String reason, int generation, int attempt) {
+        if (generation != refreshGeneration) return;
+        {
             try {
                 WeakReference<Controller> current = controller;
                 Controller maps = current != null ? current.get() : null;
                 if (maps == null || !Utils.isContextSet()) {
-                    ReportLog.i(TAG, "V2.5 refresh unavailable: controller or context missing (" + reason + ")");
+                    ReportLog.i(TAG, "V3.1 refresh unavailable: controller or context missing (" + reason + ")");
+                    if (attempt < 3) mainHandler().postDelayed(() -> refreshAttempt(reason, generation, attempt + 1), 500L << attempt);
                     return;
                 }
                 if (maps.morpheRefreshNight(liveConfiguration())) {
@@ -532,7 +538,7 @@ public final class ColorScheme {
             } catch (Throwable error) {
                 ReportLog.w(TAG, "Color refresh failed", error);
             }
-        });
+        }
     }
 
     /**

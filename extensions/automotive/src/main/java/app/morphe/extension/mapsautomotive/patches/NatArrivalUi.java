@@ -111,7 +111,7 @@ public final class NatArrivalUi {
     private static final WeakHashMap<TextView, Boolean> WATCHED = new WeakHashMap<>();
     public static void install(Activity activity) {
         if (activity == null || INSTALLED.put(activity, true) != null) return;
-        ReportLog.i("NatArrivalUi", "V3.1 alpha1 hook installed");
+        ReportLog.i("NatArrivalUi", "V3.1 alpha2.1 hook installed");
         WeakReference<Activity> ref = new WeakReference<>(activity);
         MAIN.postDelayed(new Runnable() {
             @Override public void run() {
@@ -122,8 +122,13 @@ public final class NatArrivalUi {
                     if (root != null && a.hasWindowFocus() && SafeMode.on(a, SafeMode.BYD_BATTERY)) {
                         attach(root, a);
                         scan(root, 0);
-                    }
-                } catch (RuntimeException error) { ReportLog.w("NatArrivalUi", "Scan failed", error); }
+                        NatNavigationCard.refresh(root);
+                    } else if (root != null) { NatNavigationCard.clear(root); }
+                } catch (RuntimeException error) {
+                    View root = a.getWindow().peekDecorView();
+                    if (root != null) NatNavigationCard.clear(root);
+                    ReportLog.w("NatArrivalUi", "Scan failed", error);
+                }
                 MAIN.postDelayed(this, 1000);
             }
         }, 1000);
@@ -142,7 +147,7 @@ public final class NatArrivalUi {
                     queued = false;
                     View v = r.get(); Activity owner = a.get();
                     if (v == null || owner == null || owner.isDestroyed() || !owner.hasWindowFocus() || !SafeMode.on(owner, SafeMode.BYD_BATTERY)) return;
-                    try { scan(v, 0); } catch (RuntimeException ignored) { }
+                    try { NatNavigationCard.clear(v); } catch (RuntimeException ignored) { }
                 });
             }
         });
@@ -191,9 +196,11 @@ public final class NatArrivalUi {
             watch(tv);
             double km = routeKm(text);
             String comparison = ""; // No verified route identity: do not mix independent forecast with native UI.
-            if (value < 0) comparison = "Charge required";
+
             boolean thai = "th".equals(tv.getResources().getConfiguration().getLocales().get(0).getLanguage()) || Pattern.compile("[\\u0E00-\\u0E7F]").matcher(text).find();
+            if (value < 0) comparison = thai ? "ต้องชาร์จ" : "Charge required";
             boolean dark = ColorScheme.nightColors(tv.getContext());
+            if (navigation) return; // Keep native navigation text and layout intact.
             if (text instanceof Spanned) {
                 NatSize[] existing = ((Spanned) text).getSpans(0, text.length(), NatSize.class);
                 if (existing.length == 1 && existing[0].value == value && existing[0].dark == dark && existing[0].navigation == navigation && existing[0].comparison.equals(comparison)) return;
@@ -201,15 +208,10 @@ public final class NatArrivalUi {
             SpannableString styled = new SpannableString(text);
             for (NatSize old : styled.getSpans(0, styled.length(), NatSize.class)) styled.removeSpan(old);
             styled.setSpan(new NatSize(value, dark, thai, comparison, navigation), m.start(1), m.end(1), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            if (navigation) {
-                tv.setSingleLine(false);
-                tv.setMaxLines(3);
-                tv.setEllipsize(null);
-                tv.setHorizontallyScrolling(false);
-            }
+
             tv.setText(styled);
-            if (navigation) { tv.requestLayout(); ReportLog.i("NatArrivalUi", "V3.1 alpha1 active navigation span applied"); }
-            ReportLog.i("NatArrivalUi", "V3.1 alpha1 arrival span applied");
+
+            ReportLog.i("NatArrivalUi", "V3.1 alpha2.1 arrival span applied");
         } else if (view instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) view;
             for (int i = 0; i < group.getChildCount(); i++) scan(group.getChildAt(i), depth + 1);

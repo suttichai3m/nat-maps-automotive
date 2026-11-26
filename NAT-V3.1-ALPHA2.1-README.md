@@ -1,0 +1,2 @@
+# Alpha 2.1 safety checkpoint
+Apply over Alpha 1 (includes Alpha 2 changes). Experimental overlay deliberately disabled until route identity and layout are verified. No destination hook or voice implementation. Native navigation remains unchanged by overlay. Preview span logic remains experimental. CI runs both Java test suites. Android compilation and vehicle tests pending. Do not install as stable.

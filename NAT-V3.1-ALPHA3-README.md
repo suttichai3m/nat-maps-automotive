@@ -1,0 +1,2 @@
+# Alpha 3 experimental source delta
+Apply over Alpha 1 (includes Alpha 2.1 delta). Preserve the original branch. Review workflow token settings before publishing. Adds bounded retry when the Maps theme controller/context is unavailable, and schedule boundary validation/tests. Does not force Activity recreation or change navigation. Overlay remains disabled pending verified route hook. Android compilation and vehicle runtime not verified. Retry is not a proven fix for the live map renderer.

@@ -1,35 +1,29 @@
-name: NAT V3.1-alpha1 integrated patch build
-
+name: NAT V3.1 integrated candidate build
 on:
   workflow_dispatch:
-
 permissions:
   contents: read
   packages: read
-
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
-
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools'
-
-      - name: Install Android SDK packages
-        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
-
+      - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - name: Signed SOC unit tests
         run: bash scripts/test-signed-soc.sh
-
+      - name: Navigation summary tests
+        run: bash scripts/test-navigation-summary.sh
+      - name: Theme schedule tests
+        run: bash scripts/test-theme-schedule.sh
       - name: Build patch
         env:
           GITHUB_ACTOR: ${{ github.actor }}
@@ -37,9 +31,8 @@ jobs:
         run: |
           bash gradlew --no-daemon :patches:generatePatchesList
           bash gradlew --no-daemon buildAndroid
-
       - uses: actions/upload-artifact@v4
         with:
-          name: NAT-V3.1-alpha1-integrated-mpp
+          name: NAT-V3.1-integrated-candidate-mpp
           path: patches/build/libs/*.mpp
           if-no-files-found: error
