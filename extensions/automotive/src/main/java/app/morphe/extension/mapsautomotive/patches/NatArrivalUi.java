@@ -140,7 +140,11 @@ public final class NatArrivalUi {
             if (!v.isAttachedToWindow() || !v.hasWindowFocus() || !SafeMode.on(v.getContext(), SafeMode.BYD_BATTERY)) {
                 NatNavigationCard.clear(v); return;
             }
-            try { scan(v, 0); NatNavigationCard.refresh(v); }
+            try {
+                java.util.ArrayList<TextView> matches = new java.util.ArrayList<>();
+                scan(v, 0, matches);
+                NatNavigationCard.refresh(v, matches);
+            }
             catch (RuntimeException error) { NatNavigationCard.clear(v); }
         }, 250);
     }
@@ -166,14 +170,16 @@ public final class NatArrivalUi {
                 TextView v = ref.get();
                 if (v == null || !v.hasWindowFocus()) return;
                 View root = v.getRootView();
-                NatNavigationCard.invalidateForecast(root);
+                if (NatNavigationSummary.hasRoute(s)) {
+                    NatNavigationCard.invalidateIfChanged(root, NatNavigationSummary.parse(s));
+                } else { NatNavigationCard.invalidateForecast(root); }
                 requestRefresh(root);
             }
             public void afterTextChanged(Editable e) { }
         });
     }
-    private static void scan(View view, int depth) {
-        if (depth > 40 || view.getVisibility() != View.VISIBLE) return;
+    private static void scan(View view, int depth, java.util.List<TextView> matches) {
+        if (depth > 40 || !view.isShown()) return;
         if (view instanceof TextView) {
             TextView tv = (TextView) view;
             if (tv instanceof android.widget.EditText || tv.isTextSelectable()) return;
@@ -182,7 +188,10 @@ public final class NatArrivalUi {
             Matcher nav = NAV.matcher(text.toString().replace("\u00a0", " "));
             boolean navigation = nav.matches();
             // Active navigation is rendered by the independent card, not a shrinking span.
-            if (navigation || NatNavigationSummary.hasRoute(text)) { watch(tv); return; }
+            if (navigation || NatNavigationSummary.hasRoute(text)) {
+                if (NatNavigationSummary.hasRoute(text)) matches.add(tv);
+                watch(tv); return;
+            }
             Matcher m = navigation ? nav : ARRIVAL.matcher(text);
             if (!m.matches()) {
                 m = PERCENT.matcher(text);
@@ -226,7 +235,7 @@ public final class NatArrivalUi {
             ReportLog.i("NatArrivalUi", "V3.1 battery-first native span applied");
         } else if (view instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) view;
-            for (int i = 0; i < group.getChildCount(); i++) scan(group.getChildAt(i), depth + 1);
+            for (int i = 0; i < group.getChildCount(); i++) scan(group.getChildAt(i), depth + 1, matches);
         }
     }
 }

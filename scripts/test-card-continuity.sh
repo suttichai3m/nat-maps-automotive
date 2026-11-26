@@ -7,10 +7,10 @@ cat > "$D/TestContinuity.java" <<'JAVA'
 package app.morphe.extension.mapsautomotive.patches;
 class TestContinuity {
  public static void main(String[] args) {
- long[] t={-1,0,1000,2500,2501,10000};
- boolean[] e={false,true,true,true,false,false};
+ long[] t={-1,0,1000,2500,2501,5999,6000,6001,10000};
+ boolean[] e={false,true,true,true,true,true,true,false,false};
  for(int i=0;i<t.length;i++) if(NatCardContinuity.keep(t[i])!=e[i]) throw new AssertionError(t[i]);
- System.out.println("PASS: 6 continuity cases");
+ System.out.println("PASS: 9 continuity cases");
  }
 }
 JAVA

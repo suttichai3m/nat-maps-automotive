@@ -18,18 +18,11 @@ final class NatNavigationCard {
         Card c = CARDS.get(root);
         if (c != null && c.soc != null) { c.soc = null; c.invalidateSelf(); }
     }
-    private static void find(View v, java.util.List<TextView> matches, int depth) {
-        if (depth > 40 || !v.isShown()) return;
-        if (v instanceof TextView && !(v instanceof android.widget.EditText)) {
-            if (NatNavigationSummary.hasRoute(((TextView)v).getText())) matches.add((TextView)v);
-        } else if (v instanceof ViewGroup) {
-            ViewGroup g = (ViewGroup)v;
-            for (int i=0;i<g.getChildCount();i++) find(g.getChildAt(i),matches,depth+1);
-        }
+    static void invalidateIfChanged(View root, Integer soc) {
+        Card c = CARDS.get(root);
+        if (c != null && !java.util.Objects.equals(c.soc, soc)) invalidateForecast(root);
     }
-    static void refresh(View root) {
-        java.util.ArrayList<TextView> matches = new java.util.ArrayList<>();
-        find(root,matches,0);
+    static void refresh(View root, java.util.List<TextView> matches) {
         if (matches.isEmpty()) { pending(root); return; }
         TextView tv=matches.get(0);
         Integer soc=NatNavigationSummary.parse(tv.getText());
@@ -52,7 +45,7 @@ final class NatNavigationCard {
             Rect target=new Rect(local); target.offset(origin[0],origin[1]);
             if (!obstructs(root,target,tv,0)) { chosen=local; break; }
         }
-        if (chosen==null) { clear(root); return; }
+        if (chosen==null) { pending(root); return; }
         int x=chosen.left,y=chosen.top;
         boolean thai=tv.getResources().getConfiguration().getLocales().get(0).getLanguage().equals("th") || tv.getText().toString().matches("(?s).*[\\u0E00-\\u0E7F].*");
         boolean dark=ColorScheme.nightColors(tv.getContext());
@@ -84,14 +77,15 @@ final class NatNavigationCard {
                 View v = ref.get();
                 if (v != null && CARDS.get(v) == c && c.lastSeen == seen
                         && !NatCardContinuity.keep(android.os.SystemClock.elapsedRealtime()-seen)) clear(v);
-            }, Math.max(1, 2501-(android.os.SystemClock.elapsedRealtime()-seen)));
+            }, Math.max(1, NatCardContinuity.MAX_MS+1-(android.os.SystemClock.elapsedRealtime()-seen)));
         }
         boolean dark=ColorScheme.nightColors(root.getContext());
         if(c.soc!=null || c.dark!=dark) { c.soc=null; c.dark=dark; c.invalidateSelf(); }
     }
     // Never cover visible text or actionable leaf controls.
     private static boolean obstructs(View v, Rect target, View anchor, int depth) {
-        if (depth > 40 || !v.isShown() || v == anchor) return false;
+        if (!v.isShown() || v == anchor) return false;
+        if (depth > 40) return true;
         Rect r = new Rect();
         if (!v.getGlobalVisibleRect(r) || !Rect.intersects(r, target)) return false;
         if (v instanceof TextView || (v.isClickable() && !(v instanceof ViewGroup))) return true;

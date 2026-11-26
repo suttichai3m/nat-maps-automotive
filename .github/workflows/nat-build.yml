@@ -1,4 +1,4 @@
-name: NAT V3.1 lightweight continuity candidate build
+name: NAT V3.1 lightweight stability candidate build
 on:
   workflow_dispatch:
 permissions:
@@ -35,6 +35,6 @@ jobs:
           bash gradlew --no-daemon buildAndroid
       - uses: actions/upload-artifact@v4
         with:
-          name: NAT-V3.1-lightweight-continuity-mpp
+          name: NAT-V3.1-lightweight-stability-mpp
           path: patches/build/libs/*.mpp
           if-no-files-found: error
