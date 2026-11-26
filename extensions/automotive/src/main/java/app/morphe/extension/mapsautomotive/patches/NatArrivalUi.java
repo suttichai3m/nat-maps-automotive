@@ -168,17 +168,10 @@ public final class NatArrivalUi {
             try {
                 java.util.ArrayList<TextView> matches = new java.util.ArrayList<>();
                 scan(v, 0, matches);
-                if (matches.isEmpty()) collectSplitSummary(v, 0, matches);
+                // Active navigation uses the native Compose renderer patched at build time.
+                // Do not add a View or resize the old summary TextView on top of it.
                 NatNavigationCard.clear(v);
-                NatDedicatedFrame.refresh(v, matches);
-                // If a measured child cannot be attached, enlarge the verified native SOC itself.
-                if (!NatDedicatedFrame.visible(v)) for (TextView tv : matches) {
-                    if (NatNavigationSummary.localSoc(tv.getText()) != null ||
-                        (NatSignedSoc.parse(NatNavigationSummary.normalize(tv.getText())) != null && nearbyRoute(tv))) {
-                        styleNavigation(tv);
-                        break;
-                    }
-                }
+                NatDedicatedFrame.clear(v);
             }
             catch (RuntimeException error) { NatNavigationCard.clear(v); }
         }, 250);

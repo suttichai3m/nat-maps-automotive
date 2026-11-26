@@ -7,13 +7,14 @@ private const val NAT_UI = "Lapp/morphe/extension/mapsautomotive/patches/NatArri
 
 @Suppress("unused")
 val natArrivalUiPatch = bytecodePatch(
-    name = "NAT arrival battery V3.1 dedicated card",
-    description = "Dedicated active navigation card with fixed size and collision checks; preserves native forecast.",
+    name = "NAT arrival battery V3.1 native measured card",
+    description = "Native measured battery card, icon, percentage and level bar; preserves Google forecast.",
     default = true,
 ) {
     compatibleWith(compatibility)
     dependsOn(bydBatteryPatch)
     execute {
+        useNativeNavigationBattery()
         requireExtensionMethod(NAT_UI, "install", listOf("Landroid/app/Activity;"), "V")
         val method = findHierarchyHook(MAIN_CLASS, "Maps activity onCreate") {
             it.name == "onCreate" && it.returnType == "V" &&

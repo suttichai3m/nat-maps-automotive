@@ -1,4 +1,4 @@
-name: NAT V3.1 native summary live mode build 16
+name: NAT V3.1 native measured card build 18
 on:
   workflow_dispatch:
 permissions:
@@ -26,6 +26,8 @@ jobs:
         run: bash scripts/test-theme-schedule.sh
       - name: Card placement and continuity tests
         run: bash scripts/test-card-placement.sh && bash scripts/test-card-continuity.sh
+      - name: Native card decoration tests
+        run: bash scripts/test-native-card.sh
       - name: Build patch
         env:
           GITHUB_ACTOR: ${{ github.actor }}
@@ -35,6 +37,6 @@ jobs:
           bash gradlew --no-daemon buildAndroid
       - uses: actions/upload-artifact@v4
         with:
-          name: NAT-V3.1-native-summary-live-build16-mpp
+          name: NAT-V3.1-native-measured-card-build18-mpp
           path: patches/build/libs/*.mpp
           if-no-files-found: error

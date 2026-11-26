@@ -75,22 +75,11 @@ internal fun BytecodePatchContext.useColorScheme() {
     // Every anchor is checked, and the added method built, before the controller changes.
     val night = nightField(controller, update, call)
     val refresh = screensRefresh(controller)
-    val modeFields = controller.fields.filter { field ->
-        !AccessFlags.STATIC.isSet(field.accessFlags) && !AccessFlags.FINAL.isSet(field.accessFlags) &&
-            classDefByOrNull(field.type)?.let { c -> c.superclass == "Ljava/lang/Enum;" && MODE_NAMES.all { c.hasString(it) } } == true
-    }
-    val modeCode = if (modeFields.size == 2) modeFields.mapIndexed { index, field ->
-        val ref = "${field.definingClass}->${field.name}:${field.type}"
-        """
-            iget-object v0, p0, $ref
-            const/4 v1, $index
-            invoke-static { p0, v0, v1 }, $COLOR_SCHEME_CLASS->nativeMode(Ljava/lang/Object;Ljava/lang/Enum;I)Ljava/lang/Enum;
-            move-result-object v0
-            check-cast v0, ${field.type}
-            iput-object v0, p0, $ref
-        """.trimIndent()
-    }.joinToString("\n") else ""
-    val refreshMethod = refreshMethod(controller, update, night, refresh, modeCode)
+    requireExtensionMethod(COLOR_SCHEME_CLASS, "nativeModeValue", listOf("Ljava/lang/Enum;"), "Ljava/lang/Enum;")
+    val forceCode = nativeConsumerCode(controller, update)
+    val refreshMethod = refreshMethod(controller, update, night, refresh, forceCode)
+    giveNativeConsumerMode(controller, NIGHT_TRACE, "a")
+    giveNativeConsumerMode(controller, BASEMAP_TRACE, "b")
     giveNight(controller, update, call)
     addRefresh(controller, update, night, refresh, refreshMethod)
 }
@@ -295,9 +284,52 @@ private fun BytecodePatchContext.giveNight(controller: ClassDef, update: Method,
     )
 }
 
+// Verified on the original and patched APK: d(Configuration) only calls g/f when its cached flag changes.
+// Each native consumer takes current cluster state and a notification boolean. The native refresh is gated on BOTH a state change and that boolean.
+private fun nativeConsumerCode(controller: ClassDef, update: Method): String {
+    if (controller.type != "Ljnh;" || update.name != "d") throw PatchException("NAT18: unknown native controller")
+    val code = update.implementation!!.instructions.toList()
+    val expected = listOf("Ljnh;->c:Laord;", "Laord;->d()Ljava/lang/Object;", "Ljnh;->g(Ljnk;Z)V", "Ljnh;->f(Ljnk;Z)V")
+    val anchors = expected.map { key -> code.indices.singleOrNull { memberKey(code[it]) == key }
+        ?: throw PatchException("NAT18: controller anchor missing or ambiguous: $key") }
+    if (anchors != anchors.sorted()) throw PatchException("NAT18: controller update order changed")
+    return """
+        iget-object v0, p0, Ljnh;->c:Laord;
+        invoke-interface { v0 }, Laord;->d()Ljava/lang/Object;
+        move-result-object v0
+        check-cast v0, Ljnk;
+        const/4 v1, 0x0
+        invoke-virtual { p0, v0, v1 }, Ljnh;->g(Ljnk;Z)V
+        invoke-virtual { p0, v0, v1 }, Ljnh;->f(Ljnk;Z)V
+    """.trimIndent()
+}
+
+// Apply manual mode on every read of the mode enum in each consumer; do not mutate the stored enum.
+// Maps' asynchronous settings collector can overwrite stored modes, so the old one-shot field write was insufficient.
+private fun BytecodePatchContext.giveNativeConsumerMode(controller: ClassDef, trace: String, fieldName: String) {
+    val original = controller.methods.singleOrNull { m -> m.implementation?.instructions?.any { it.literalString() == trace } == true }
+        ?: throw PatchException("NAT18: native color consumer missing: $trace")
+    if (original.parameterTypes.map { it.toString() } != listOf("Ljnk;", "Z") || original.returnType != "V")
+        throw PatchException("NAT18: native consumer signature changed")
+    val method = mutableClassDefBy(controller).methods.single { it.name == original.name && it.parameterTypes == original.parameterTypes && it.returnType == original.returnType }
+    val code = method.implementation!!.instructions
+    val index = code.indices.singleOrNull { code[it].opcode == Opcode.IGET_OBJECT && memberKey(code[it]) == "Ljnh;->$fieldName:Lowp;" }
+        ?: throw PatchException("NAT18: native color enum read missing: $fieldName")
+    val next = code.getOrNull(index + 1)
+    val register = code[index].registerA()
+    if (register != 2 || next?.opcode != Opcode.INVOKE_VIRTUAL || memberKey(next) != "Lowp;->ordinal()I" || next.location.labels.isNotEmpty())
+        throw PatchException("NAT18: native color enum consumer changed")
+    method.addInstructions(index + 1, """
+        invoke-static { v2 }, $COLOR_SCHEME_CLASS->nativeModeValue(Ljava/lang/Enum;)Ljava/lang/Enum;
+        move-result-object v2
+        check-cast v2, Lowp;
+    """.trimIndent())
+    colorSchemeLogger.info("NAT18: native mode override installed in $trace")
+}
+
 // morpheRefreshNight(Configuration) runs the controller's update again and, when the stored night value changed,
 // refreshes Maps' screens; it returns whether the value changed. Built before the controller changes.
-private fun refreshMethod(controller: ClassDef, update: Method, night: String, refresh: ScreensRefresh, modeCode: String): MutableMethod {
+private fun refreshMethod(controller: ClassDef, update: Method, night: String, refresh: ScreensRefresh, forceCode: String): MutableMethod {
     val invoke = if (AccessFlags.PRIVATE.isSet(update.accessFlags)) "invoke-direct" else "invoke-virtual"
     return ImmutableMethod(
         controller.type,
@@ -312,8 +344,10 @@ private fun refreshMethod(controller: ClassDef, update: Method, night: String, r
         addInstructionsWithLabels(
             0,
             """
-                $modeCode
                 $invoke { p0, p1 }, ${controller.type}->${update.name}($CONFIGURATION)V
+                $forceCode
+                # Native f/g skip refresh if their cached state already changed during d().
+                # Call the verified shared refresh sink once, unconditionally, after both values are set.
                 iget-object v0, p0, ${refresh.lazyField}
                 invoke-interface { v0 }, ${refresh.lazyGet}
                 move-result-object v0

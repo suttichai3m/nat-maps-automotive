@@ -530,6 +530,43 @@ public final class ColorScheme {
         return current;
     }
 
+    /** Used by both native color consumers, including updates from Maps' own settings flow. */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static Enum<?> nativeModeValue(Enum<?> current) {
+        if (current == null) return null;
+        try {
+            if (!on()) return current;
+            String selected = choice();
+            if (DAY.equals(selected) || NIGHT.equals(selected)) {
+                return Enum.valueOf((Class) current.getDeclaringClass(), NIGHT.equals(selected) ? "FORCE_NIGHT" : "FORCE_DAY");
+            }
+        } catch (Throwable error) { ReportLog.w(TAG, "Native consumer mode override failed", error); }
+        return current;
+    }
+
+    /** Color the decoration consistently with the current native/manual mode. */
+    public static boolean nativeCardNight() {
+        try {
+            if (on()) {
+                String selected = choice();
+                if (DAY.equals(selected)) return false;
+                if (NIGHT.equals(selected)) return true;
+            }
+            Boolean value = givenNight;
+            if (value != null) return value;
+            return (liveConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+        } catch (Throwable ignored) { return Boolean.TRUE.equals(givenNight); }
+    }
+
+    public static String nativeCardLabel() {
+        try {
+            return "th".equals(Utils.getContext().getResources().getConfiguration().getLocales().get(0).getLanguage())
+                    ? "แบตเมื่อถึง" : "Arrival battery";
+        } catch (Throwable ignored) {
+            return "th".equals(Locale.getDefault().getLanguage()) ? "แบตเมื่อถึง" : "Arrival battery";
+        }
+    }
+
     private static int refreshGeneration; // main thread only
 
     private static void refresh(String reason) {
@@ -548,7 +585,7 @@ public final class ColorScheme {
                     return;
                 }
                 if (maps.morpheRefreshNight(liveConfiguration())) {
-                    ReportLog.i(TAG, "Maps' screens refreshed for " + (Boolean.TRUE.equals(givenNight) ? "night" : "day")
+                    ReportLog.i(TAG, "Native screen and basemap update dispatched for " + (Boolean.TRUE.equals(givenNight) ? "night" : "day")
                             + " colors (" + reason + ")");
                     // The refresh binds a Settings row again with the subtitle it was built with.
                     subtitleAfterRefresh();
