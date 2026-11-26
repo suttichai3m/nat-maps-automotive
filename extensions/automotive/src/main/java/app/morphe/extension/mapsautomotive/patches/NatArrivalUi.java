@@ -36,6 +36,7 @@ public final class NatArrivalUi {
         if(m.find()) return Double.NaN;
         try { return Double.parseDouble(number.replace(',','.')); } catch(NumberFormatException e) { return Double.NaN; }
     }
+    private static final Pattern NAV = Pattern.compile("(?iu)^\\s*[0-9]+(?:[.,][0-9]+)?\\s*(?:กม\\.?|km|mi|เมตร|m)\\s*[·•・]\\s*[0-9]{1,2}:[0-9]{2}(?:\\s*(?:น\\.?|AM|PM))?\\s*[·•・]\\s*([+−-]?[0-9]{1,3}\\s*[%％])(?:\\s|\\uFFFC|\\u200E|\\u200F)*$");
     private static boolean routeSummary(CharSequence text) {
         return DISTANCE.matcher(text).find() && TIME.matcher(text).find();
     }
@@ -110,7 +111,7 @@ public final class NatArrivalUi {
     private static final WeakHashMap<TextView, Boolean> WATCHED = new WeakHashMap<>();
     public static void install(Activity activity) {
         if (activity == null || INSTALLED.put(activity, true) != null) return;
-        ReportLog.i("NatArrivalUi", "V3.1 integrated navigation battery hook installed");
+        ReportLog.i("NatArrivalUi", "V3.1 alpha2.1 hook installed");
         WeakReference<Activity> ref = new WeakReference<>(activity);
         MAIN.postDelayed(new Runnable() {
             @Override public void run() {
@@ -120,8 +121,8 @@ public final class NatArrivalUi {
                     View root = a.getWindow().peekDecorView();
                     if (root != null && a.hasWindowFocus() && SafeMode.on(a, SafeMode.BYD_BATTERY)) {
                         attach(root, a);
-                        NatNavigationCard.refresh(root);
                         scan(root, 0);
+                        NatNavigationCard.refresh(root);
                     } else if (root != null) { NatNavigationCard.clear(root); }
                 } catch (RuntimeException error) {
                     View root = a.getWindow().peekDecorView();
@@ -145,9 +146,8 @@ public final class NatArrivalUi {
                 MAIN.post(() -> {
                     queued = false;
                     View v = r.get(); Activity owner = a.get();
-                    if (v == null || owner == null) return;
-                    if (owner.isDestroyed() || !owner.hasWindowFocus() || !SafeMode.on(owner, SafeMode.BYD_BATTERY)) { NatNavigationCard.clear(v); return; }
-                    try { NatNavigationCard.refresh(v); } catch (RuntimeException ignored) { NatNavigationCard.clear(v); }
+                    if (v == null || owner == null || owner.isDestroyed() || !owner.hasWindowFocus() || !SafeMode.on(owner, SafeMode.BYD_BATTERY)) return;
+                    try { NatNavigationCard.clear(v); } catch (RuntimeException ignored) { }
                 });
             }
         });
@@ -165,10 +165,7 @@ public final class NatArrivalUi {
                     queued = false;
                     TextView v = ref.get();
                     if (v == null || !v.isShown() || !v.hasWindowFocus() || !SafeMode.on(v.getContext(), SafeMode.BYD_BATTERY)) return;
-                    try {
-                        NatNavigationCard.refresh(v.getRootView());
-                        scan(v, 0);
-                    } catch (RuntimeException ignored) { NatNavigationCard.clear(v.getRootView()); }
+                    try { scan(v, 0); } catch (RuntimeException ignored) { }
                 });
             }
             public void afterTextChanged(Editable e) { }
@@ -181,19 +178,9 @@ public final class NatArrivalUi {
             if (tv instanceof android.widget.EditText || tv.isTextSelectable()) return;
             CharSequence text = tv.getText();
             if (text == null) return;
-            // Native navigation summary stays intact; the separate card owns this case.
-            if (NatNavigationCard.owns(tv) || NatNavigationCard.isNavigationSource(tv) || NatNavigationSummary.parseLegacy(text) != null) {
-                watch(tv);
-                // A recycled TextView may still carry the preview-only span.
-                if (text instanceof Spanned && ((Spanned) text).getSpans(0, text.length(), NatSize.class).length > 0) {
-                    SpannableString nativeText = new SpannableString(text);
-                    for (NatSize span : nativeText.getSpans(0, nativeText.length(), NatSize.class)) nativeText.removeSpan(span);
-                    tv.setText(nativeText);
-                }
-                return;
-            }
-            boolean navigation = false;
-            Matcher m = ARRIVAL.matcher(text);
+            Matcher nav = NAV.matcher(text.toString().replace("\u00a0", " "));
+            boolean navigation = nav.matches();
+            Matcher m = navigation ? nav : ARRIVAL.matcher(text);
             if (!m.matches()) {
                 m = PERCENT.matcher(text);
                 if (!m.find()) return;
@@ -213,6 +200,7 @@ public final class NatArrivalUi {
             boolean thai = "th".equals(tv.getResources().getConfiguration().getLocales().get(0).getLanguage()) || Pattern.compile("[\\u0E00-\\u0E7F]").matcher(text).find();
             if (value < 0) comparison = thai ? "ต้องชาร์จ" : "Charge required";
             boolean dark = ColorScheme.nightColors(tv.getContext());
+            if (navigation) return; // Keep native navigation text and layout intact.
             if (text instanceof Spanned) {
                 NatSize[] existing = ((Spanned) text).getSpans(0, text.length(), NatSize.class);
                 if (existing.length == 1 && existing[0].value == value && existing[0].dark == dark && existing[0].navigation == navigation && existing[0].comparison.equals(comparison)) return;

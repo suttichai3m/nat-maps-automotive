@@ -1,4 +1,6 @@
-# NAT V3.1 — Integrated Navigation Battery (reference candidate, not Final)
-Based on the supplied map-original source. The newest implementation supersedes the previous independent 200x120 frame: the arrival battery is now placed within the native trip summary when a safe cell is available; only adjacent-to-summary fallback is allowed. See NAT-INTEGRATED-BATTERY-REFERENCE.md. Original Day/Night, energy prediction, GPS and BYD battery calculation source unchanged.
+# V3.1 integrated candidate (not Final)
+Merged Alpha 1 full source and cumulative Alpha 3 delta. Voice Search excluded. No verified destination/route hook; experimental overlay remains disabled. Charging stop correlation and live renderer refresh are unverified. Do not install as Final.
 
-165 pure JVM parser/geometry/theme cases passed; Android SDK and Morphe build dependencies unavailable here, so Android compilation, MPP/APK generation and BYD runtime remain unverified. No authenticated GitHub push was performed. Use the existing CI workflow and signing key. Keep working original APK. Test parked before real driving.
+Local Java tests: 14 parser + 3 bar + 9 navigation summary + 15 theme schedule = 41 passed. Android SDK absent in this environment; Android compilation, MPP/APK generation and BYD runtime not performed. Original V3.0 Verified APK SHA256: a49b8266dc933ed844e8d4d72d4cd07f7f40730c91e79be7aa377873d3ad08be.
+
+CI: workflow_dispatch, Java 21, Android SDK 36, all three test scripts before Gradle. Verify MORPHE_PACKAGES_TOKEN access. Preserve baseline branch and APK. Do not merge to main or install until route identity, safe layout and regression checks pass.
