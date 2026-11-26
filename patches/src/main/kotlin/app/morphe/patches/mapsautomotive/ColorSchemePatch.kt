@@ -75,7 +75,22 @@ internal fun BytecodePatchContext.useColorScheme() {
     // Every anchor is checked, and the added method built, before the controller changes.
     val night = nightField(controller, update, call)
     val refresh = screensRefresh(controller)
-    val refreshMethod = refreshMethod(controller, update, night, refresh)
+    val modeFields = controller.fields.filter { field ->
+        !AccessFlags.STATIC.isSet(field.accessFlags) && !AccessFlags.FINAL.isSet(field.accessFlags) &&
+            classDefByOrNull(field.type)?.let { c -> c.superclass == "Ljava/lang/Enum;" && MODE_NAMES.all { c.hasString(it) } } == true
+    }
+    val modeCode = if (modeFields.size == 2) modeFields.mapIndexed { index, field ->
+        val ref = "${field.definingClass}->${field.name}:${field.type}"
+        """
+            iget-object v0, p0, $ref
+            const/4 v1, $index
+            invoke-static { p0, v0, v1 }, $COLOR_SCHEME_CLASS->nativeMode(Ljava/lang/Object;Ljava/lang/Enum;I)Ljava/lang/Enum;
+            move-result-object v0
+            check-cast v0, ${field.type}
+            iput-object v0, p0, $ref
+        """.trimIndent()
+    }.joinToString("\n") else ""
+    val refreshMethod = refreshMethod(controller, update, night, refresh, modeCode)
     giveNight(controller, update, call)
     addRefresh(controller, update, night, refresh, refreshMethod)
 }
@@ -282,7 +297,7 @@ private fun BytecodePatchContext.giveNight(controller: ClassDef, update: Method,
 
 // morpheRefreshNight(Configuration) runs the controller's update again and, when the stored night value changed,
 // refreshes Maps' screens; it returns whether the value changed. Built before the controller changes.
-private fun refreshMethod(controller: ClassDef, update: Method, night: String, refresh: ScreensRefresh): MutableMethod {
+private fun refreshMethod(controller: ClassDef, update: Method, night: String, refresh: ScreensRefresh, modeCode: String): MutableMethod {
     val invoke = if (AccessFlags.PRIVATE.isSet(update.accessFlags)) "invoke-direct" else "invoke-virtual"
     return ImmutableMethod(
         controller.type,
@@ -297,6 +312,7 @@ private fun refreshMethod(controller: ClassDef, update: Method, night: String, r
         addInstructionsWithLabels(
             0,
             """
+                $modeCode
                 $invoke { p0, p1 }, ${controller.type}->${update.name}($CONFIGURATION)V
                 iget-object v0, p0, ${refresh.lazyField}
                 invoke-interface { v0 }, ${refresh.lazyGet}

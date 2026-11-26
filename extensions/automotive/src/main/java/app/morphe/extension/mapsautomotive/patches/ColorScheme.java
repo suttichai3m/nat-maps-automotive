@@ -510,6 +510,26 @@ public final class ColorScheme {
      * Runs Maps' night mode update again on the main thread, so a new value applies at once; when the value
      * changed, Maps' screens are refreshed with it. [reason] is for the log.
      */
+    // Native screen and basemap mode enum fields: preserve the previous mode on leaving manual selection.
+    private static final java.util.WeakHashMap<Object, Enum<?>[]> nativeModes = new java.util.WeakHashMap<>();
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static Enum<?> nativeMode(Object owner, Enum<?> current, int slot) {
+        if (owner == null || current == null || slot < 0 || slot > 1) return current;
+        try {
+            Enum<?>[] saved = nativeModes.get(owner);
+            String selected = choice();
+            if (on() && (DAY.equals(selected) || NIGHT.equals(selected))) {
+                if (saved == null) { saved = new Enum<?>[2]; nativeModes.put(owner, saved); }
+                if (saved[slot] == null) saved[slot] = current;
+                return Enum.valueOf((Class) current.getDeclaringClass(), NIGHT.equals(selected) ? "FORCE_NIGHT" : "FORCE_DAY");
+            }
+            if (saved != null && saved[slot] != null) {
+                Enum<?> old = saved[slot]; saved[slot] = null; return old;
+            }
+        } catch (Throwable error) { ReportLog.w(TAG, "Native mode override failed", error); }
+        return current;
+    }
+
     private static int refreshGeneration; // main thread only
 
     private static void refresh(String reason) {

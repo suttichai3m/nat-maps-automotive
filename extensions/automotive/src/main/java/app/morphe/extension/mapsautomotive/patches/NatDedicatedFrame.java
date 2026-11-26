@@ -8,6 +8,7 @@ import java.lang.ref.WeakReference;
 /** Dedicated measured child in a native vertical summary container; never covers controls. */
 final class NatDedicatedFrame {
     private static final WeakHashMap<View, WeakReference<BatteryView>> frames = new WeakHashMap<>();
+    static boolean visible(View root) { WeakReference<BatteryView> r=frames.get(root); BatteryView v=r==null?null:r.get(); return v!=null && v.isShown() && v.getWidth()>0 && v.getHeight()>0; }
     static boolean owns(View v) { return v instanceof BatteryView; }
     static void clear(View root) {
         WeakReference<BatteryView> ref=frames.remove(root);
@@ -26,18 +27,38 @@ final class NatDedicatedFrame {
         }
         if(conflict)soc=null;
         if(anchor==null){if(card!=null && card.isShown())card.update(null); return;}
-        LinearLayout host=null; ViewParent parent=anchor.getParent();
-        for(int i=0;i<4 && parent instanceof ViewGroup;i++,parent=parent.getParent()) {
-            if(parent instanceof LinearLayout && ((LinearLayout)parent).getOrientation()==LinearLayout.VERTICAL){host=(LinearLayout)parent;break;}
+        // Use a measured native horizontal summary row, not an overlay.
+        ViewParent parent=anchor.getParent();
+        if (!(parent instanceof LinearLayout)) {
+            if(card!=null) card.update(null);
+            return;
         }
-        if(host==null){clear(root);return;}
+        LinearLayout host=(LinearLayout)parent;
         float d=root.getResources().getDisplayMetrics().density;
         int w=Math.round(220*d),h=Math.round(124*d);
-        if(host.getWidth()-host.getPaddingLeft()-host.getPaddingRight()<w)return;
-        if(card==null || card.getParent()!=host){clear(root);card=new BatteryView(host.getContext());
-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(w,h); lp.gravity=Gravity.CENTER_HORIZONTAL;
-            host.addView(card,lp);frames.put(root,new WeakReference<>(card));
+        if(card!=null && card.getParent()==host){card.update(soc);return;}
+        int available=host.getWidth()-host.getPaddingLeft()-host.getPaddingRight();
+        int used=0;
+        for(int i=0;i<host.getChildCount();i++) {
+            View child=host.getChildAt(i);
+            if(child.getVisibility()==View.GONE || owns(child))continue;
+            used+=child.getMeasuredWidth();
+            ViewGroup.LayoutParams cp=child.getLayoutParams();
+            if(cp instanceof ViewGroup.MarginLayoutParams) {
+                ViewGroup.MarginLayoutParams mp=(ViewGroup.MarginLayoutParams)cp;
+                used+=mp.leftMargin+mp.rightMargin;
+            }
         }
+        if(host.getOrientation()!=LinearLayout.HORIZONTAL || available-used<w) {
+            // The native text fallback is handled by NatArrivalUi; do not cover controls.
+            if(card!=null)card.update(null);
+            return;
+        }
+        clear(root);
+        card=new BatteryView(host.getContext());
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(w,h);
+        lp.gravity=Gravity.CENTER_VERTICAL;
+        host.addView(card,lp);frames.put(root,new WeakReference<>(card));
         card.update(soc);
     }
     private static final class BatteryView extends View {

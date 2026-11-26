@@ -171,6 +171,14 @@ public final class NatArrivalUi {
                 if (matches.isEmpty()) collectSplitSummary(v, 0, matches);
                 NatNavigationCard.clear(v);
                 NatDedicatedFrame.refresh(v, matches);
+                // If a measured child cannot be attached, enlarge the verified native SOC itself.
+                if (!NatDedicatedFrame.visible(v)) for (TextView tv : matches) {
+                    if (NatNavigationSummary.localSoc(tv.getText()) != null ||
+                        (NatSignedSoc.parse(NatNavigationSummary.normalize(tv.getText())) != null && nearbyRoute(tv))) {
+                        styleNavigation(tv);
+                        break;
+                    }
+                }
             }
             catch (RuntimeException error) { NatNavigationCard.clear(v); }
         }, 250);
@@ -247,6 +255,11 @@ public final class NatArrivalUi {
         SpannableString styled=new SpannableString(text);
         for(NatSize old:styled.getSpans(0,styled.length(),NatSize.class)) styled.removeSpan(old);
         styled.setSpan(new NatSize(value,dark,thai,value<0?(thai?"ต้องชาร์จ":"Charge required"):"",true,0,tv.getResources().getDisplayMetrics().density),start,end,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        tv.setSingleLine(false);
+        tv.setMaxLines(Integer.MAX_VALUE);
+        tv.setEllipsize(null);
+        ViewGroup.LayoutParams params=tv.getLayoutParams();
+        if(params!=null && params.height>=0) {params.height=ViewGroup.LayoutParams.WRAP_CONTENT;tv.setLayoutParams(params);}
         tv.setText(styled);
         tv.requestLayout();
         tv.invalidate();
