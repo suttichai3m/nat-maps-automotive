@@ -124,7 +124,7 @@ public final class NatArrivalUi {
                         attach(root, a);
                         NatNavigationCard.refresh(root);
                         scan(root, 0);
-                        try { NatMinimalEv.refresh(a,root); } catch (RuntimeException ignored) { NatMinimalEv.clear(a); }
+                        try { NatMinimalEv.refresh(a,root); } catch (RuntimeException error) { NatMinimalEv.clear(a); ReportLog.w("NatMinimalEv","Overlay refresh failed",error); }
                     } else { focused=false; if(root!=null){NatNavigationCard.clear(root);NatMinimalEv.clear(a);} }
                 } catch (RuntimeException error) {
                     View root = a.getWindow().peekDecorView();
@@ -155,13 +155,13 @@ public final class NatArrivalUi {
             @Override public void onGlobalLayout() {
                 if (queued) return;
                 queued = true;
-                MAIN.post(() -> {
+                MAIN.postDelayed(() -> {
                     queued = false;
                     View v = r.get(); Activity owner = a.get();
                     if (v == null || owner == null) return;
                     if (owner.isDestroyed() || !owner.hasWindowFocus() || !SafeMode.on(owner, SafeMode.BYD_BATTERY)) { NatNavigationCard.clear(v); return; }
                     try { NatNavigationCard.refresh(v); } catch (RuntimeException ignored) { NatNavigationCard.clear(v); }
-                });
+                },250);
             }
         });
     }

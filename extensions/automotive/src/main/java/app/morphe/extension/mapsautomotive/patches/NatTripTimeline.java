@@ -72,13 +72,13 @@ final class NatTripTimeline {
         previousWh=s.energyWh;previousEnergyAt=now;
         WATCH.removeCallbacks(WATCHDOG); WATCH.postDelayed(WATCHDOG,36000);
         if(!NatStabilityMath.moving(s.speedKmh)){
-            if(!Double.isFinite(s.speedKmh)||s.speedKmh>250||lastMoving<0||now-lastMoving>=60000)stop();
+            if(!Double.isFinite(s.speedKmh)||s.speedKmh<0||s.speedKmh>250||lastMoving<0||now-lastMoving>=60000)stop();
             setStatus("Parked or speed unavailable");return;
         }
         lastMoving=now;
         try{
             if(manager==null)manager=(LocationManager)c.getSystemService(Context.LOCATION_SERVICE);
-            if(manager==null){status="GPS unavailable";return;}
+            if(manager==null){stop();setStatus("GPS unavailable");return;}
             if(!listening){
                 manager.requestLocationUpdates(LocationManager.GPS_PROVIDER,10000,5,listener,Looper.getMainLooper());
                 listening=true;

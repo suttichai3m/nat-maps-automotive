@@ -336,6 +336,8 @@ final class BydForecast {
         private static final int MAX_PROGRESS_MPS = 40;
 
         private Guided open;
+        private long sessionSerial;
+        synchronized long activeSession(){return open==null?-1:sessionSerial;}
         private final List<Guided> closed = new ArrayList<>();
         private final List<String> notes = new ArrayList<>();
         private long lastForecastElapsed;
@@ -451,6 +453,7 @@ final class BydForecast {
 
         private void start(long wall, long elapsed, Forecast f, int batteryWh, double soc, int capacityWh, int shownPercent) {
             Guided g = new Guided();
+            sessionSerial++;
             g.startWall = wall;
             if (capacityWh > 0) g.capacityWh = capacityWh;
             if (batteryWh >= 0) { g.startBatteryWh = batteryWh; g.startSoc = soc; }

@@ -417,7 +417,6 @@ public final class BydBatteryPatch {
             long wall = System.currentTimeMillis(), now = SystemClock.elapsedRealtime();
             boolean fresh = lastSampleAt != 0 && now - lastSampleAt <= FRESH_MS;
             int batteryWh = fresh ? sampleEnergyWh : -1;
-            NatPrediction.capture(forecast, fresh ? sampleSoc : Double.NaN, fresh ? sampleCapacityWh : -1,batteryWh);
             if (!forecast.isEmpty()) forecastSeen = true;
             // The start-up reset is recorded below but does not close a drive restored after a restart.
             if (forecastSeen) {
@@ -426,6 +425,7 @@ public final class BydBatteryPatch {
                 guided.onForecast(wall, now, forecast, batteryWh, fresh ? sampleSoc : Double.NaN, fresh ? sampleCapacityWh : -1,
                         shown);
             }
+            NatPrediction.capture(forecast, fresh ? sampleSoc : Double.NaN, fresh ? sampleCapacityWh : -1,batteryWh,guided.activeSession());
             // The calibration's traction factor compares Maps' forecasts with the battery used.
             BydCalibration calibrating = calibration;
             if (calibrating != null) {
@@ -705,7 +705,7 @@ public final class BydBatteryPatch {
             // with the adjusted model also its traction factor and auxiliary power (":A1.046/868").
             record.model = file == null ? "fallback" : file.name + ":" + file.drainAtTimeText(bydTemperature(file, outsideC))
                     + ":m" + massKg(file) + (adjustedSent ? String.format(Locale.ROOT, ":A%.3f/%d", sentFactor, sentAuxW) : "");
-            try { NatPrediction.observe(record); } catch (RuntimeException ignored) { /* optional energy summary */ }
+            try { NatPrediction.observe(record,tracker.activeSession()); } catch (RuntimeException ignored) { /* optional energy summary */ }
             BydDriveLog.sample(record);
             try { NatTripTimeline.sample(context, record); } catch (RuntimeException ignored) { /* optional recorder */ }
         } catch (Throwable error) {

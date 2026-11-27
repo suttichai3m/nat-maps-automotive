@@ -26,7 +26,8 @@ final class NatMinimalEv {
         WeakReference<android.widget.LinearLayout> toolbar,panel,current,remaining;
         String currentKey="",remainingKey="";
         long categoryUntil=-1;
-        boolean opened,previousFresh;
+        boolean opened,confirmed,previousFresh;
+        long previousSession=-1;
         int previousStops=-1,mode=0;
         long openedAt=-1;
         String rendered="",diagnostic="";
@@ -36,7 +37,7 @@ final class NatMinimalEv {
         View sheet(){return panel==null?null:panel.get();}
     }
     static boolean enabled(Context c){return c.getSharedPreferences(PREF,0).getBoolean("shortcut",true);}
-    static void setEnabled(Activity a,boolean on){a.getSharedPreferences(PREF,0).edit().putBoolean("shortcut",on).apply();if(!on)clear(a);}
+    static void setEnabled(Activity a,boolean on){a.getSharedPreferences(PREF,0).edit().putBoolean("shortcut",on).apply();if(!on){clear(a);STATES.remove(a);}}
     private static String id(View v){try{return v.getId()==View.NO_ID?"":v.getResources().getResourceEntryName(v.getId());}catch(RuntimeException e){return "";}}
     private static boolean in(View v,String name){for(View p=v;p!=null;){if(id(p).equals(name))return true;ViewParent par=p.getParent();p=par instanceof View?(View)par:null;}return false;}
     private static boolean visible(View v){return v.isShown()&&v.getAlpha()>0f&&v.getGlobalVisibleRect(new Rect());}
@@ -88,12 +89,20 @@ final class NatMinimalEv {
     private static final String OWN="nat_v201_overlay";
     static boolean owned(View v){return OWN.equals(v.getTag());}
     private static void report(State s,String msg){if(!msg.equals(s.diagnostic)){s.diagnostic=msg;ReportLog.i("NatMinimalEv",msg);}}
-    private static boolean ownedSearch(State s){long now=android.os.SystemClock.elapsedRealtime();return s.opened&&s.openedAt>=0&&now-s.openedAt<=120000;}
+    private static boolean ownedSearch(State s){return s.opened&&(s.confirmed||(s.openedAt>=0&&android.os.SystemClock.elapsedRealtime()-s.openedAt<=15000));}
+    private static void resetSearch(State s){s.opened=false;s.confirmed=false;s.openedAt=-1;}
+    private static void updateSearch(State s,Controls c){
+        long age=s.openedAt<0?-1:android.os.SystemClock.elapsedRealtime()-s.openedAt;
+        if(!NatMinimalEvRules.keepSearch(s.opened,s.confirmed,c.results,c.evEvidence,c.mapControls,age)){resetSearch(s);return;}
+        if(NatMinimalEvRules.confirmedSearch(s.opened,c.results,c.evEvidence,c.mapControls))s.confirmed=true;
+    }
     private static boolean hideNative(State s,Controls c,boolean explicitOnly){
+        if(!c.mapControls)return false;
+        updateSearch(s,c);
         View h=unique(c.hide),close=unique(c.close);
-        if(h!=null&&c.mapControls){if(h.performClick()){s.opened=false;report(s,"Native EV hide requested");return true;}}
-        if(!explicitOnly&&NatMinimalEvRules.allowClose(ownedSearch(s),c.results,c.evEvidence,close!=null)){
-            if(close.performClick()){s.opened=false;report(s,"Native close search requested");return true;}
+        if(h!=null&&c.mapControls){if(h.performClick()){resetSearch(s);report(s,"Native EV hide requested");return true;}}
+        if(!explicitOnly&&NatMinimalEvRules.allowClose(s.confirmed,c.results,c.evEvidence,close!=null)){
+            if(close.performClick()){resetSearch(s);report(s,"Native close search requested");return true;}
         }
         return false;
     }
@@ -101,17 +110,18 @@ final class NatMinimalEv {
     private static void act(Activity a,State state,boolean clean){
         if(a.isFinishing()||!a.hasWindowFocus()||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY))return;
         View root=a.getWindow().peekDecorView();if(root==null)return;
-        Controls c=controls(root);boolean route=NatNavigationCard.hasVerifiedRoute(root);
+        Controls c=controls(root);updateSearch(state,c);boolean route=NatNavigationCard.hasVerifiedRoute(root);
         state.mode=0;removePanel(state);
         if(clean){
             if((ownedSearch(state)||unique(c.hide)!=null)&&!hideNative(state,c,false)&&c.results)toast(a,"ปิดผลค้นหา EV ด้วยปุ่มของ Maps");
+            state.categoryUntil=-1;
             report(state,"Clean mode: NAT panels closed; native route retained");return;
         }
         if(hideNative(state,c,false))return;
         if(ownedSearch(state)&&c.results){toast(a,"ใช้ปุ่มปิดผลค้นหาของ Maps");return;}
         View open=unique(c.open),along=unique(c.along);
         boolean pending=android.os.SystemClock.elapsedRealtime()<=state.categoryUntil&&c.mapControls;
-        if((route||pending)&&open!=null&&!c.results){if(open.performClick()){state.opened=true;state.categoryUntil=-1;state.openedAt=android.os.SystemClock.elapsedRealtime();report(state,"Native EV category requested");}return;}
+        if((route||pending)&&open!=null&&!c.results){if(open.performClick()){state.opened=true;state.confirmed=false;state.categoryUntil=-1;state.openedAt=android.os.SystemClock.elapsedRealtime();report(state,"Native EV category requested");}return;}
         if(route&&along!=null&&!c.results){if(along.performClick()){state.categoryUntil=android.os.SystemClock.elapsedRealtime()+30000;toast(a,"เลือกหมวดการชาร์จ EV ใน Maps");}return;}
         toast(a,"เปิดค้นหาตามเส้นทางใน Maps แล้วเลือก EV");report(state,"Native EV action unavailable; no route change");
     }
@@ -140,7 +150,7 @@ final class NatMinimalEv {
     private static int dp(Context a,int v){return Math.round(v*a.getResources().getDisplayMetrics().density);}
     private static GradientDrawable background(int color,int radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(radius);return g;}
     private static TextView button(Activity a,String symbol,String description,Runnable action){
-        TextView t=new TextView(a);t.setTag(OWN);t.setText(symbol);t.setTextSize(23);t.setGravity(Gravity.CENTER);t.setContentDescription(description);t.setOnClickListener(v->action.run());return t;
+        TextView t=new TextView(a);t.setTag(OWN);t.setText(symbol);t.setTextSize(23);t.setGravity(Gravity.CENTER);t.setContentDescription(description);t.setOnClickListener(v->{try{action.run();}catch(RuntimeException ex){clear(a);ReportLog.w("NatMinimalEv","Optional control failed",ex);}});return t;
     }
     private static void style(TextView t,boolean active,boolean dark,int radius){
         t.setBackground(background(active?0xff16805c:dark?0xff20303a:0xffffffff,radius));t.setTextColor(active||dark?Color.WHITE:0xff263238);
@@ -182,8 +192,10 @@ final class NatMinimalEv {
         String used=number(observed,"kWh"),money=number(cost,"THB");
         String plan=f==null?"ไม่มี forecast สดที่ตรงกับเส้นทาง":f.charges==0?"ยังไม่มีจุดชาร์จใน forecast":("แผนจาก Maps (ไม่มีชื่อสถานี)"+f.plan);
         String arrival=f==null?"—":f.google+"%";
-        String signature=s.mode+"|"+dark+"|"+remaining+"|"+rate+"|"+used+"|"+money+"|"+plan+"|"+arrival+"|"+power+"|"+actualRate+"|"+increase+"|"+coverage+"|"+powerState+"|"+slot.toShortString();
+        String signature=s.mode+"|"+dark+"|"+remaining+"|"+rate+"|"+used+"|"+money+"|"+plan+"|"+arrival+"|"+power+"|"+actualRate+"|"+increase+"|"+coverage+"|"+powerState+"|"+live.gaps+"|"+slot.toShortString();
         if(signature.equals(s.rendered)&&s.sheet()!=null)return;
+        int oldScroll=0;View previous=s.sheet();
+        if(previous instanceof ViewGroup){ViewGroup group=(ViewGroup)previous;if(group.getChildCount()>1&&group.getChildAt(1) instanceof android.widget.ScrollView)oldScroll=group.getChildAt(1).getScrollY();}
         removePanel(s);s.rendered=signature;
         int fg=dark?0xffedf4f7:0xff263238, muted=dark?0xffbacbd3:0xff546a74;
         android.widget.LinearLayout box=column(a);box.setPadding(dp(a,12),dp(a,8),dp(a,12),dp(a,8));box.setBackground(background(dark?0xff20303a:Color.WHITE,dp(a,12)));box.setElevation(dp(a,6));
@@ -195,7 +207,7 @@ final class NatMinimalEv {
             content.addView(line(a,"LIVE POWER • ค่าเฉลี่ยช่วงตัวอย่าง",12,muted));
             content.addView(line(a,power+" · "+powerState,20,fg));
             if(Double.isFinite(displayedPower)){
-                android.widget.ProgressBar gauge=new android.widget.ProgressBar(a,null,android.R.attr.progressBarStyleHorizontal);gauge.setTag(OWN);gauge.setMax(500);gauge.setProgress((int)Math.round(displayedPower+250));content.addView(gauge,new android.widget.LinearLayout.LayoutParams(-1,dp(a,12)));
+                PowerGauge gauge=new PowerGauge(a,displayedPower,dark);gauge.setTag(OWN);content.addView(gauge,new android.widget.LinearLayout.LayoutParams(-1,dp(a,18)));
                 content.addView(line(a,"− เพิ่มพลังงาน     0     + จ่ายพลังงาน (kW)",10,muted));
             }
             String[] labels={"พลังงานสุทธิที่สังเกตได้","พลังงานที่ต้องใช้อีก","สิ้นเปลืองจากช่วงที่มีเลขไมล์","พลังงานเพิ่มขณะเคลื่อนที่","สิ้นเปลืองตาม forecast","ค่าไฟประมาณการ"};
@@ -206,7 +218,7 @@ final class NatMinimalEv {
                 content.addView(row);
             }
             content.addView(line(a,f==null?"ไม่มี forecast สดที่ตรงกับเส้นทาง":f.charges>0?"ประมาณจากพลังงานและจุดชาร์จขั้นต่ำใน Maps":"ประมาณจาก Wh ของ BYD และ Maps",11,muted));
-            content.addView(line(a,"ช่วงที่มีเลขไมล์: "+coverage+" • ไม่ใช่ยอดทั้งเที่ยว • พลังงานเพิ่มไม่ใช่ค่า Regen ที่ยืนยันแล้ว",11,muted));
+            content.addView(line(a,"ช่วงที่มีเลขไมล์: "+coverage+" • อัตราสิ้นเปลืองรออย่างน้อย 2 กม. • ช่วงขาด/ตัดออก: "+live.gaps+" • ไม่ใช่ยอดทั้งเที่ยว • ไม่ใช่ค่า Regen ที่ยืนยันแล้ว",11,muted));
             android.widget.Button set=new android.widget.Button(a);set.setTag(OWN);set.setText("ตั้งค่าไฟ");set.setOnClickListener(v->editTariff(a,s));content.addView(set);
         }else{
             content.addView(line(a,plan,14,fg));content.addView(line(a,"แบตปลายทางตาม Maps: "+arrival,15,fg));
@@ -215,6 +227,16 @@ final class NatMinimalEv {
             content.addView(line(a,"ให้ Maps คำนวณใหม่หลังเพิ่มจุดแวะ • ยังไม่แนะนำสถานีอัตโนมัติ",11,muted));
         }
         put(host,box,slot,true);s.panel=new WeakReference<>(box);
+        if(oldScroll>0){final int position=oldScroll;scroll.post(()->scroll.scrollTo(0,position));}
+    }
+    private static final class PowerGauge extends View {
+        final double kw;final boolean dark;final android.graphics.Paint paint=new android.graphics.Paint(3);
+        PowerGauge(Context c,double kw,boolean dark){super(c);this.kw=kw;this.dark=dark;setContentDescription("Average battery power "+number(kw,"kW"));}
+        @Override protected void onDraw(android.graphics.Canvas canvas){super.onDraw(canvas);float x=getWidth()/2f,y=getHeight()/2f,h=dp(getContext(),4),amount=(float)(Math.min(250,Math.abs(kw))/250*x);
+            paint.setColor(dark?0xff40535e:0xffdce5e0);canvas.drawRoundRect(0,y-h,getWidth(),y+h,h,h,paint);
+            paint.setColor(kw<0?0xff169b65:0xff4285f4);if(amount>0)canvas.drawRoundRect(kw<0?x-amount:x,y-h,kw<0?x:x+amount,y+h,h,h,paint);
+            paint.setColor(dark?Color.WHITE:0xff263238);paint.setStrokeWidth(dp(getContext(),2));canvas.drawLine(x,0,x,getHeight(),paint);
+        }
     }
     private static void removeMini(State s,boolean current){
         WeakReference<android.widget.LinearLayout> ref=current?s.current:s.remaining;
@@ -259,12 +281,13 @@ final class NatMinimalEv {
         List<View> views=new ArrayList<>();collect(root,views,0,null);Controls c=inspect(views);
         boolean route=NatNavigationCard.recentlyVerified(root);
         NatPrediction.Snapshot forecast=NatPrediction.freshSnapshot();boolean fresh=forecast!=null;int stops=fresh?forecast.charges:-1;
-        if(NatStabilityMath.autoHide(state.previousFresh,state.previousStops,fresh,stops)){
+        if(NatStabilityMath.autoHide(state.previousFresh,state.previousStops,fresh,stops)||(fresh&&state.previousSession!=forecast.session)){
             state.mode=0;removePanel(state);report(state,"Auto-hide: new forecast or changed charging-stop count");
             // Native results are never cleared automatically through generic close or Back.
         }
-        state.previousFresh=fresh;state.previousStops=stops;
-        if(!ownedSearch(state)||(!c.results&&!c.evEvidence&&unique(c.hide)==null&&unique(c.open)!=null))state.opened=false;
+        if(fresh&&state.previousSession>=0&&state.previousSession!=forecast.session)resetSearch(state);
+        state.previousFresh=fresh;state.previousStops=stops;if(fresh)state.previousSession=forecast.session;
+        updateSearch(state,c);
         if(!c.mapControls||(!route&&!ownedSearch(state)&&!(android.os.SystemClock.elapsedRealtime()<=state.categoryUntil))){clear(a);return;}
         Rect bounds=new Rect();if(!host.getGlobalVisibleRect(bounds)){clear(a);return;}
         int size=dp(a,48),gap=dp(a,7),edge=dp(a,12),length=size*4+gap*3;

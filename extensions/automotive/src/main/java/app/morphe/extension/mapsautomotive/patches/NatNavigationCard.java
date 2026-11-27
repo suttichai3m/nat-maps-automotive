@@ -160,7 +160,7 @@ final class NatNavigationCard {
     static boolean hasVerifiedRoute(View root) { List<Match> m=matches(root); return m.size()==1 && m.get(0).panel!=null; }
     private static final WeakHashMap<View,Long> VERIFIED=new WeakHashMap<>();
     private static final WeakHashMap<View,double[]> ROUTES=new WeakHashMap<>();
-    static boolean recentlyVerified(View root){Long t=VERIFIED.get(root);return t!=null&&android.os.SystemClock.elapsedRealtime()-t<=2000;}
+    static boolean recentlyVerified(View root){Long t=VERIFIED.get(root);long now=android.os.SystemClock.elapsedRealtime();return root.hasWindowFocus()&&t!=null&&now>=t&&now-t<=2000;}
     static boolean matchesForecast(View root,NatPrediction.Snapshot f){
         double[] m=ROUTES.get(root);if(f==null||m==null||!recentlyVerified(root))return false;
         return NatStabilityMath.matches((int)m[0],m[1],f.google,f.km)||(f.charges>0&&NatStabilityMath.matches((int)m[0],m[1],f.next,f.nextKm));
@@ -251,6 +251,7 @@ final class NatNavigationCard {
     }
     private static boolean hasDrawable(TextView tv) {
         for(Drawable d:tv.getCompoundDrawables()) if(d!=null) return true;
+        for(Drawable d:tv.getCompoundDrawablesRelative()) if(d!=null) return true;
         return false;
     }
     private static boolean ancestor(View v,View child) {

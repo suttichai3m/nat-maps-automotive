@@ -166,15 +166,15 @@ public class TestNatLiveEnergy {
   check(near(e.read(10000,true).soc,82));check(Double.isNaN(e.read(10000,true).power));
   e.accept(20000,81,64900,1001,50,true);
   NatLiveEnergy.Reading r=e.read(20000,true);
-  check(near(r.power,36));check(near(r.net,.1));check(near(r.rate,100));check(near(r.km,.1));check(near(r.increase,0));check(r.pairs==1);
+  check(near(r.power,36));check(near(r.net,.1));check(Double.isNaN(r.rate));check(near(r.km,.1));check(near(r.increase,0));check(r.pairs==1);
   e.accept(30000,81,64950,1002,50,true);r=e.read(30000,true);
-  check(near(r.power,-18));check(near(r.net,.05));check(near(r.increase,.05));check(near(r.rate,25));
+  check(near(r.power,-18));check(near(r.net,.05));check(near(r.increase,.05));check(Double.isNaN(r.rate));
   e.accept(40000,82,66000,1002,0,true);r=e.read(40000,true);
   check(Double.isNaN(r.power));check(near(r.net,.05));check(near(r.increase,.05));
   e.accept(50000,82,65900,1003,50,true);check(e.read(50000,true).pairs==2);
   e.accept(90000,82,65500,1005,50,true);check(e.read(90000,true).pairs==2);
   e.accept(100000,81,60000,1006,50,true);check(Double.isNaN(e.read(100000,true).power));check(e.read(100000,true).pairs==2);
-  e.accept(110000,81,59900,-1,50,true);r=e.read(110000,true);check(near(r.net,.15));check(near(r.rate,25));
+  e.accept(110000,81,59900,-1,50,true);r=e.read(110000,true);check(near(r.net,.15));check(Double.isNaN(r.rate));
   check(Double.isNaN(e.read(140001,true).soc));check(Double.isNaN(e.read(140001,true).net));
   e.accept(120000,80,59800,1007,50,false);check(near(e.read(120000,false).soc,80));check(Double.isNaN(e.read(120000,false).net));
   e.accept(130000,80,59700,1008,50,true);check(Double.isNaN(e.read(130000,true).net));
@@ -188,3 +188,28 @@ public class TestNatLiveEnergy {
 JAVA
 javac --release 17 -encoding UTF-8 -d "$D" "$P/NatLiveEnergy.java" "$D/TestNatLiveEnergy.java"
 java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatLiveEnergy
+
+cat > "$D/TestNatRelease.java" <<'JAVA'
+package app.morphe.extension.mapsautomotive.patches;
+public class TestNatRelease {
+ static int n;static void check(boolean x){if(!x)throw new AssertionError("Release case "+n);n++;}
+ static boolean near(double a,double b){return Math.abs(a-b)<1e-6;}
+ public static void main(String[] args){
+  check(Double.isNaN(NatLiveEnergy.coveredRate(.2,.1)));check(Double.isNaN(NatLiveEnergy.coveredRate(.2,1.99)));check(near(NatLiveEnergy.coveredRate(.3,2),15));check(Double.isNaN(NatLiveEnergy.coveredRate(-1,2)));
+  NatLiveEnergy e=new NatLiveEnergy();e.setSession(1);e.accept(10000,80,60000,1000,72,true);
+  for(int i=1;i<=10;i++)e.accept(10000+i*10000,80,60000-30*i,1000+2*i,72,true);
+  NatLiveEnergy.Reading r=e.read(110000,true);check(near(r.km,2));check(near(r.net,.3));check(near(r.rate,15));check(r.gaps==0);
+  e.accept(150000,79,59500,1028,72,true);r=e.read(150000,true);check(r.gaps==1);check(near(r.net,.3));check(Double.isNaN(r.power));
+  e.setSession(1);check(near(e.read(150000,true).net,.3));e.setSession(2);check(Double.isNaN(e.read(150000,true).net));
+  e.accept(160000,79,59470,1030,72,true);check(Double.isNaN(e.read(160000,true).power));
+  e.accept(170000,79,59440,1032,72,true);check(near(e.read(170000,true).net,.03));
+  e.setSession(-1);check(Double.isNaN(e.read(170000,true).net));check(near(e.read(170000,false).soc,79));
+  check(NatMinimalEvRules.keepSearch(true,false,false,false,true,15000));check(!NatMinimalEvRules.keepSearch(true,false,false,false,true,15001));
+  check(NatMinimalEvRules.keepSearch(true,true,true,true,true,3600000));check(!NatMinimalEvRules.keepSearch(true,true,true,false,true,100));check(!NatMinimalEvRules.keepSearch(true,true,false,true,true,100));check(!NatMinimalEvRules.keepSearch(true,true,true,true,false,100));check(!NatMinimalEvRules.keepSearch(false,true,true,true,true,100));check(!NatMinimalEvRules.keepSearch(true,true,true,true,true,-1));
+  check(NatMinimalEvRules.confirmedSearch(true,true,true,true));check(!NatMinimalEvRules.confirmedSearch(true,true,false,true));check(!NatMinimalEvRules.confirmedSearch(false,true,true,true));
+  System.out.println("PASS: "+n+" NAT release hardening cases");
+ }
+}
+JAVA
+javac --release 17 -encoding UTF-8 -d "$D" "$P/NatLiveEnergy.java" "$P/NatMinimalEvRules.java" "$D/TestNatRelease.java"
+java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatRelease

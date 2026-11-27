@@ -11,19 +11,21 @@ import java.util.Locale;
 final class NatPrediction {
     private static volatile Snapshot snapshot;
     private static final NatLiveEnergy live=new NatLiveEnergy();
-    static synchronized void observe(BydDriveLog.Sample s){
-        live.accept(s.elapsed,s.soc,s.energyWh,s.mileage01km,s.speedKmh,freshSnapshot()!=null);
+    static synchronized void observe(BydDriveLog.Sample s,long session){
+        Snapshot f=freshSnapshot();boolean valid=f!=null&&session>=0&&session==f.session;
+        live.setSession(valid?session:-1);
+        live.accept(s.elapsed,s.soc,s.energyWh,s.mileage01km,s.speedKmh,valid);
     }
     static synchronized NatLiveEnergy.Reading liveReading(){return BydBatteryPatch.isActive()?live.read(SystemClock.elapsedRealtime(),freshSnapshot()!=null):new NatLiveEnergy.Reading(Double.NaN,Double.NaN,Double.NaN,Double.NaN,Double.NaN,Double.NaN,0);}
     static synchronized double observedKwh(){return liveReading().net;}
     static Snapshot freshSnapshot(){Snapshot s=snapshot;return s!=null&&BydBatteryPatch.isActive()&&NatStabilityMath.fresh(SystemClock.elapsedRealtime(),s.at)?s:null;}
-    static synchronized void clear(){snapshot=null;live.endRoute();}
+    static synchronized void clear(){snapshot=null;live.setSession(-1);live.endRoute();}
     static final class Snapshot {
-        final long at; final double soc, capacity, km; final int google, charges; final String plan; final int next; final double nextKm; final double remainingKwh;
-        Snapshot(double s,double c,double d,int g,int n,String plan,int next,double nextKm,double remainingKwh) { at=SystemClock.elapsedRealtime(); soc=s; capacity=c; km=d; google=g; charges=n; this.plan=plan; this.next=next; this.nextKm=nextKm; this.remainingKwh=remainingKwh; }
+        final long at,session; final double soc, capacity, km; final int google, charges; final String plan; final int next; final double nextKm; final double remainingKwh;
+        Snapshot(double s,double c,double d,int g,int n,String plan,int next,double nextKm,double remainingKwh,long session) { at=SystemClock.elapsedRealtime(); this.session=session; soc=s; capacity=c; km=d; google=g; charges=n; this.plan=plan; this.next=next; this.nextKm=nextKm; this.remainingKwh=remainingKwh; }
     }
-    static synchronized void capture(BydForecast.Forecast f, double soc, int capacityWh,int currentWh) {
-        if (f.isEmpty() || !Double.isFinite(soc) || capacityWh <= 0 || f.finalArrivalWh()==BydForecast.NO_ENERGY) { clear(); return; }
+    static synchronized void capture(BydForecast.Forecast f, double soc, int capacityWh,int currentWh,long session) {
+        if (session<0 || f.isEmpty() || !Double.isFinite(soc) || capacityWh <= 0 || f.finalArrivalWh()==BydForecast.NO_ENERGY) { clear(); return; }
         StringBuilder plan=new StringBuilder(); int i=0; long minimumAdded=0,cumulativeM=0; boolean complete=true;
         for(BydForecast.Stop stop:f.stops) { cumulativeM+=Math.max(0,stop.distanceM); if(!stop.charging)continue;
             if(!stop.hasArrival||stop.arrivalWh<0||stop.minDepartureWh<=0||stop.minDepartureWh<stop.arrivalWh||stop.minDepartureWh>capacityWh)complete=false;
@@ -34,7 +36,8 @@ final class NatPrediction {
             if(cumulativeM>0)plan.append(" · ").append(fmt(cumulativeM/1000.0)).append(" กม.");
         }
         BydForecast.Stop first=f.stops.get(0);
-        snapshot=new Snapshot(soc,capacityWh/1000.0,f.totalDistanceM()/1000.0,signed(f.finalArrivalWh(),capacityWh),f.chargeStops(),plan.toString(),first.hasArrival?signed(first.arrivalWh,capacityWh):Integer.MIN_VALUE,first.distanceM/1000.0,NatStabilityMath.remainingKwh(currentWh,f.finalArrivalWh(),minimumAdded,complete));
+        live.setSession(session);
+        snapshot=new Snapshot(soc,capacityWh/1000.0,f.totalDistanceM()/1000.0,signed(f.finalArrivalWh(),capacityWh),f.chargeStops(),plan.toString(),first.hasArrival?signed(first.arrivalWh,capacityWh):Integer.MIN_VALUE,first.distanceM/1000.0,NatStabilityMath.remainingKwh(currentWh,f.finalArrivalWh(),minimumAdded,complete),session);
     }
     private static int signed(int wh,int cap){return NatStabilityMath.signedSoc(wh,cap,BydDisplayCurve.shown(wh,cap));}
     private static String energyPercent(int wh,int cap) { return wh<=0 ? fmt(wh*100.0/cap)+"%" : BydDisplayCurve.shown(wh,cap)+"%"; }
