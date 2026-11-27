@@ -120,12 +120,13 @@ final class NatMinimalEv {
     private static void layerEvidence(State s,Controls c){
         s.layerStatus="Native EV layer: show="+c.showLayer.size()+" hide="+c.hideLayer.size()+" filter="+c.layerFilter+" map="+c.mapControls+" results="+c.results;
     }
-    static String layerStatus(Activity a){State s=STATES.get(a);return s==null?"Native EV layer: not observed":s.layerStatus;}
-    static String layerButtonLabel(Activity a){State s=STATES.get(a);return s!=null&&s.layerStatus.contains("show=0 hide=1")?"Hide EV":"EV Charging";}
+    static String layerStatus(Activity a){State s=STATES.get(a);return NatNativeEvLayer.status()+"\n"+(s==null?"Native EV controls: not observed":s.layerStatus);}
+    static String layerButtonLabel(Activity a){State s=STATES.get(a);Boolean shown=NatNativeEvLayer.effective();return (shown!=null?shown:s!=null&&s.layerStatus.contains("show=0 hide=1"))?"Hide EV":"EV Charging";}
     private static void layer(Activity a,State s){
         if(a.isFinishing()||a.isDestroyed()||!a.hasWindowFocus()||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY))return;
         View root=a.getWindow().peekDecorView();if(root==null)return;
         Controls c=controls(root);layerEvidence(s,c);
+        if(NatNativeEvLayer.request(a)){report(s,"Native producer refresh requested");return;}
         int action=NatMinimalEvRules.layerAction(c.mapControls,c.results,c.showLayer.size(),c.hideLayer.size());
         View target=action==1?unique(c.showLayer):action==-1?unique(c.hideLayer):null;
         if(target!=null&&visible(target)&&target.isEnabled()&&target.performClick()){
@@ -456,7 +457,8 @@ final class NatMinimalEv {
         }else if(state.left!=slot.left||state.top!=slot.top)put(host,bar,slot,false);
         state.left=slot.left;state.top=slot.top;
         boolean[] activeKeys=new boolean[chosen.count];
-        boolean layerOn=c.showLayer.isEmpty()&&c.hideLayer.size()==1&&c.mapControls;
+        Boolean nativeLayer=NatNativeEvLayer.effective();
+        boolean layerOn=nativeLayer!=null?nativeLayer:c.showLayer.isEmpty()&&c.hideLayer.size()==1&&c.mapControls;
         if(routeControls&&chosen.count>=NatToolbarLayout.LEGACY_COUNT){activeKeys[0]=layerOn;activeKeys[1]=false;activeKeys[2]=state.mode==2;}
         else if(!routeControls&&chosen.count==4)activeKeys[3]=layerOn;
         for(int i=0;i<chosen.count;i++){TextView t=(TextView)bar.getChildAt(i);if(t.getCurrentTextColor()!=(activeKeys[i]||dark?Color.WHITE:0xff263238)||t.isSelected()!=activeKeys[i]||t.getBackground()==null){style(t,activeKeys[i],dark,size/2);t.setSelected(activeKeys[i]);}}

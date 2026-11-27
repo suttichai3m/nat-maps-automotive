@@ -155,6 +155,7 @@ val bydBatteryPatch = bytecodePatch(
         useArrivalBattery()
         usePhoneBattery()
         useDisplayCurve()
+        useNatNativeEvLayer()
         IncludedFeatures.settingsRows += BYD_BATTERY_CLASS
         IncludedFeatures.features += "byd_battery"
     }

@@ -1,6 +1,8 @@
 name: NAT V3.1 integrated candidate build
 on:
   workflow_dispatch:
+  push:
+    branches: [map-original]
 permissions:
   contents: read
   packages: read
