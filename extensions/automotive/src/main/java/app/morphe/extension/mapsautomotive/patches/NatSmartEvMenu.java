@@ -83,7 +83,7 @@ final class NatSmartEvMenu {
   },100);
  }
  private void home(){
-  heading("Smart EV  •  NAT V3.6");
+  heading("Smart EV  •  NAT V3.7");
   line("เลือกฟังก์ชัน • รายละเอียดควรเปิดดูเมื่อจอดรถ");
   action("★  Favorite Destinations • สถานที่โปรด",()->closeThen(()->NatFavorites.show(a)));
   action("⚡  Smart Charging Assistant",this::charging);
@@ -91,7 +91,8 @@ final class NatSmartEvMenu {
   action("▥  Energy Intelligence",this::energy);
   action("＋  Vehicle Health Monitor",this::health);
   action("❄  Snow AI",()->closeThen(()->NatV36Shortcuts.snow(a)));
-  action("Vehicle Control",()->closeThen(()->NatV36Shortcuts.control(a)));
+  action("OverDrive",()->closeThen(()->NatV36Shortcuts.control(a)));
+  action("ตั้งค่าปุ่ม OverDrive",()->closeThen(()->NatV36Shortcuts.configureOverDrive(a)));
   action("Charging Monitor / History",this::chargingHistory);
   action("Service Reminder",this::service);
   action("Custom Dashboard",()->closeThen(()->NatSplitScreen.customize(a)));
@@ -110,6 +111,9 @@ final class NatSmartEvMenu {
   Integer arrival=valid?Integer.valueOf(route.google):nativeArrival;
   if(arrival==null)metric("แบตปลายทาง","—");else metric("แบตปลายทาง (ตอนเปิด)",arrival+"%");
   metric("ระยะทาง (ตอนเปิด)",num(valid?route.km:nativeKm,"km"));
+  double back=valid&&route.charges==0?NatFavoriteRules.roundTrip(route.soc,route.google):Double.NaN;
+  metric("แบตกลับ (สมมติใช้พลังงานเท่าขาไป)",num(back,"%"));
+  line("ขากลับเป็นค่าประมาณจากขาไป ไม่ใช่เส้นทางย้อนกลับที่ Maps คำนวณ");
   metric("แบตสำรองเป้าหมาย",num(reserve,"%"));
   final TextView result=text("",15,fg,true);body.addView(result);
   LinearLayout controls=new LinearLayout(a);body.addView(controls);
@@ -129,7 +133,7 @@ final class NatSmartEvMenu {
   calc.run();action("คำนวณ / บันทึกเป้าหมาย",calc);
   line("ค่าประมาณ ณ เวลาเปิด • ไม่รวมการสูญเสียและช่วงลดกำลังชาร์จ • ไม่ยืนยันว่ามีสถานีว่าง");
   line(NatMinimalEv.layerStatus(a));
-  action("EV Charging Live Map • Native toggle",()->closeThen(()->NatMinimalEv.splitAction(a,0)));
+  action("EV Charging Full Map • Native layer",()->closeThen(()->NatMinimalEv.splitAction(a,0)));
   action("ค้นหาสถานีชาร์จ (Maps) • ทางเลือกเดิม",()->closeThen(()->NatMinimalEv.splitAction(a,5)));
   action("แผนการชาร์จเดิม",()->closeThen(()->NatMinimalEv.splitAction(a,2)));
   action("‹ กลับเมนู",this::home);

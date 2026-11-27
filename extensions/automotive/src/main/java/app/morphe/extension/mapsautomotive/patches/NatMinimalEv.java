@@ -32,7 +32,7 @@ final class NatMinimalEv {
         long openedAt=-1;
         String rendered="",diagnostic="";
         int left=-1,top=-1;
-        boolean vertical,explicitPanelRequest,toolbarRoute;
+        boolean vertical,explicitPanelRequest,toolbarRoute,evMode,restoreSplit,toolbarEv;
         String layerStatus="Not observed";
         View host(){return toolbar==null?null:toolbar.get();}
         View sheet(){return panel==null?null:panel.get();}
@@ -121,20 +121,32 @@ final class NatMinimalEv {
         s.layerStatus="Native EV layer: show="+c.showLayer.size()+" hide="+c.hideLayer.size()+" filter="+c.layerFilter+" map="+c.mapControls+" results="+c.results;
     }
     static String layerStatus(Activity a){State s=STATES.get(a);return NatNativeEvLayer.status()+"\n"+(s==null?"Native EV controls: not observed":s.layerStatus);}
-    static String layerButtonLabel(Activity a){State s=STATES.get(a);Boolean shown=NatNativeEvLayer.effective();return (shown!=null?shown:s!=null&&s.layerStatus.contains("show=0 hide=1"))?"Hide EV":"EV Charging";}
+    static String layerButtonLabel(Activity a){State s=STATES.get(a);return s!=null&&s.evMode?"Exit EV":"EV Charging";}
+    static boolean evMode(Activity a){State s=STATES.get(a);return s!=null&&s.evMode;}
+    private static boolean setLayer(Activity a,State s,boolean show){
+        View root=a.getWindow().peekDecorView();if(root==null)return false;
+        Controls c=controls(root);layerEvidence(s,c);
+        if(NatNativeEvLayer.request(a,show)){report(s,"Native producer state requested: "+show);return true;}
+        int action=NatMinimalEvRules.layerAction(c.mapControls,c.results,c.showLayer.size(),c.hideLayer.size());
+        if((show&&action==-1)||(!show&&action==1))return true;
+        View target=show&&action==1?unique(c.showLayer):!show&&action==-1?unique(c.hideLayer):null;
+        if(target!=null&&visible(target)&&target.isEnabled()&&target.performClick()){
+            report(s,"Native EV layer "+(show?"show":"hide")+" requested; awaiting Maps evidence");return true;
+        }
+        report(s,s.layerStatus+" | layer state unavailable; route retained");return false;
+    }
+    private static void exitEv(Activity a,State s){
+        boolean split=s.restoreSplit;s.evMode=false;s.restoreSplit=false;
+        if(!setLayer(a,s,false))toast(a,"ยังยืนยันการซ่อนหมุดไม่ได้ • ใช้ปุ่มของ Maps");
+        if(split&&!NatSplitScreen.enabled(a))NatSplitScreen.toggle(a);
+    }
     private static void layer(Activity a,State s){
         if(a.isFinishing()||a.isDestroyed()||!a.hasWindowFocus()||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY))return;
-        View root=a.getWindow().peekDecorView();if(root==null)return;
-        Controls c=controls(root);layerEvidence(s,c);
-        if(NatNativeEvLayer.request(a)){report(s,"Native producer refresh requested");return;}
-        int action=NatMinimalEvRules.layerAction(c.mapControls,c.results,c.showLayer.size(),c.hideLayer.size());
-        View target=action==1?unique(c.showLayer):action==-1?unique(c.hideLayer):null;
-        if(target!=null&&visible(target)&&target.isEnabled()&&target.performClick()){
-            report(s,"Native EV layer "+(action==1?"show":"hide")+" requested; awaiting Maps evidence");
-            return;
-        }
-        report(s,s.layerStatus+" | explicit layer control unavailable; route retained");
-        toast(a,"Maps ยังไม่เปิดปุ่มหมุด EV โดยตรง • ใช้ Smart EV > ค้นหาสถานีชาร์จ");
+        if(s.evMode){exitEv(a,s);return;}
+        if(!setLayer(a,s,true)){toast(a,"Maps ยังไม่รองรับการเปิด EV Layer • ใช้การค้นหาสถานีใน Maps");return;}
+        s.restoreSplit=NatSplitScreen.active(a);s.evMode=true;
+        if(s.restoreSplit)NatSplitScreen.toggle(a);
+        report(s,"EV Full Map requested; native markers not yet visually verified");
     }
     private static void act(Activity a,State state,boolean clean){
         if(a.isFinishing()||!a.hasWindowFocus()||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY))return;
@@ -142,6 +154,7 @@ final class NatMinimalEv {
         Controls c=controls(root);updateSearch(state,c);boolean route=NatNavigationCard.hasVerifiedRoute(root);
         state.mode=0;removePanel(state);
         if(clean){
+            if(state.evMode){exitEv(a,state);return;}
             if((ownedSearch(state)||unique(c.hide)!=null)&&!hideNative(state,c,false)&&c.results)toast(a,"ปิดผลค้นหา EV ด้วยปุ่มของ Maps");
             state.categoryUntil=-1;
             report(state,"Clean mode: NAT panels closed; native route retained");return;
@@ -233,6 +246,7 @@ final class NatMinimalEv {
         TextView button=toolbarButton(a,"▥","Split Screen 75:25",()->{
             View root=a.getWindow().peekDecorView();
             if(a.isFinishing()||a.isDestroyed()||!a.hasWindowFocus()||root==null||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY)||!controls(root).mapControls)return;
+            if(evMode(a)){State st=STATES.get(a);if(st!=null)exitEv(a,st);return;}
             NatSplitScreen.toggle(a);
         });
         button.setTooltipText("Split Screen 75:25 • hold: Favorite Destinations");
@@ -429,38 +443,40 @@ final class NatMinimalEv {
         NatToolbarLayout.Slot reserved=route&&!nativeCurrent(views)?NatToolbarLayout.currentBattery(bounds.left,bounds.top,bounds.right,bounds.bottom,dp(a,142),dp(a,58),edge,
                 q->free(views,new Rect(q.x,q.y,q.x+q.w,q.y+q.h),host)):null;
         final Rect batterySlot=reserved==null?null:new Rect(reserved.x,reserved.y,reserved.x+reserved.w,reserved.y+reserved.h);
-        NatToolbarLayout.Slot chosen=NatToolbarLayout.chooseV37Ev(c.mapControls,routeControls,
+        NatToolbarLayout.Slot chosen=NatToolbarLayout.chooseV37Mode(c.mapControls,routeControls,state.evMode,
                 bounds.left,bounds.top,bounds.right,bounds.bottom,size,gap,edge,true,
                 q->{Rect r=new Rect(q.x,q.y,q.x+q.w,q.y+q.h);return (batterySlot==null||!Rect.intersects(batterySlot,r))&&free(views,r,host);});
-        if(chosen==null){clear(a);report(state,"Toolbar unavailable: native controls protected");return;}
+        if(chosen==null){if(state.evMode&&c.mapControls){exitEv(a,state);toast(a,"ไม่มีพื้นที่ปุ่มออก EV ที่ปลอดภัย");}clear(a);report(state,"Toolbar unavailable: native controls protected");return;}
         Rect slot=new Rect(chosen.x,chosen.y,chosen.x+chosen.w,chosen.y+chosen.h);
         boolean vertical=chosen.vertical;
         if(!routeControls){state.mode=0;removePanel(state);removeMini(state,true);removeMini(state,false);}
         boolean dark=ColorScheme.nightColors(a);
         android.widget.LinearLayout bar=state.toolbar==null?null:state.toolbar.get();
-        if(bar==null||bar.getParent()!=host||state.vertical!=vertical||state.toolbarRoute!=routeControls||bar.getChildCount()!=chosen.count){
+        if(bar==null||bar.getParent()!=host||state.vertical!=vertical||state.toolbarRoute!=routeControls||state.toolbarEv!=state.evMode||bar.getChildCount()!=chosen.count){
             remove(bar);bar=column(a);bar.setOrientation(vertical?1:0);bar.setElevation(dp(a,5));
             TextView[] keys;
-            if(chosen.count==1)keys=new TextView[]{diagnosticsButton(a,owner)};
-            else if(!routeControls&&chosen.count==4)keys=new TextView[]{diagnosticsButton(a,owner),splitButton(a),snowButton(a),toolbarButton(a,"⚡","EV Charging Live Map",()->layer(a,owner))};
-            else if(chosen.count==3)keys=new TextView[]{diagnosticsButton(a,owner),splitButton(a),snowButton(a)};
-            else if(chosen.count==NatToolbarLayout.IDLE_SPLIT_COUNT)keys=new TextView[]{diagnosticsButton(a,owner),splitButton(a)};
+            if(state.evMode&&chosen.count==1)keys=new TextView[]{toolbarButton(a,"⚡","Exit EV Charging",()->layer(a,owner))};
+            else if(chosen.count==1)keys=new TextView[]{diagnosticsButton(a,owner)};
+            else if(!routeControls&&chosen.count==4)keys=new TextView[]{diagnosticsButton(a,owner),splitButton(a),snowButton(a),toolbarButton(a,"⚡",state.evMode?"Exit EV Charging":"EV Charging Live Map",()->layer(a,owner))};
+            else if(chosen.count==3)keys=new TextView[]{diagnosticsButton(a,owner),splitButton(a),state.evMode?toolbarButton(a,"⚡","Exit EV Charging",()->layer(a,owner)):snowButton(a)};
+            else if(chosen.count==NatToolbarLayout.IDLE_SPLIT_COUNT)keys=new TextView[]{diagnosticsButton(a,owner),state.evMode?toolbarButton(a,"⚡","Exit EV Charging",()->layer(a,owner)):splitButton(a)};
             else {
-                TextView[] original={toolbarButton(a,"⚡","EV Charging Live Map",()->layer(a,owner)),toolbarButton(a,"◇","Vehicle Control",()->NatV36Shortcuts.control(a)),toolbarButton(a,"☷","Charging Plan",()->switchPanel(a,owner,2)),toolbarButton(a,"⊘","Clean Mode",()->{act(a,owner,true);refresh(a,a.getWindow().peekDecorView());})};
+                TextView[] original={toolbarButton(a,"⚡",state.evMode?"Exit EV Charging":"EV Charging Live Map",()->layer(a,owner)),toolbarButton(a,"◇","OverDrive",()->NatV36Shortcuts.control(a)),toolbarButton(a,"★","Favorite Destinations",()->NatFavorites.show(a)),toolbarButton(a,"⊘","Clean Mode",()->{act(a,owner,true);refresh(a,a.getWindow().peekDecorView());})};
                 keys=java.util.Arrays.copyOf(original,chosen.count);
                 if(NatToolbarLayout.hasDiagnostics(chosen.count))keys[NatToolbarLayout.diagnosticIndex(chosen.count)]=diagnosticsButton(a,owner);
                 if(NatToolbarLayout.splitIndex(chosen.count)>=0)keys[NatToolbarLayout.splitIndex(chosen.count)]=splitButton(a);
                 if(chosen.count==7){keys[4]=diagnosticsButton(a,owner);keys[5]=splitButton(a);keys[6]=snowButton(a);}
             }
             for(int i=0;i<keys.length;i++){android.widget.LinearLayout.LayoutParams lp=new android.widget.LinearLayout.LayoutParams(size,size);if(i>0){if(vertical)lp.topMargin=gap;else lp.leftMargin=gap;}bar.addView(keys[i],lp);}
-            put(host,bar,slot,true);state.toolbar=new WeakReference<>(bar);state.vertical=vertical;state.toolbarRoute=routeControls;
+            put(host,bar,slot,true);state.toolbar=new WeakReference<>(bar);state.vertical=vertical;state.toolbarRoute=routeControls;state.toolbarEv=state.evMode;
         }else if(state.left!=slot.left||state.top!=slot.top)put(host,bar,slot,false);
         state.left=slot.left;state.top=slot.top;
         boolean[] activeKeys=new boolean[chosen.count];
         Boolean nativeLayer=NatNativeEvLayer.effective();
         boolean layerOn=nativeLayer!=null?nativeLayer:c.showLayer.isEmpty()&&c.hideLayer.size()==1&&c.mapControls;
-        if(routeControls&&chosen.count>=NatToolbarLayout.LEGACY_COUNT){activeKeys[0]=layerOn;activeKeys[1]=false;activeKeys[2]=state.mode==2;}
+        if(routeControls&&chosen.count>=NatToolbarLayout.LEGACY_COUNT){activeKeys[0]=layerOn;activeKeys[1]=false;activeKeys[2]=false;}
         else if(!routeControls&&chosen.count==4)activeKeys[3]=layerOn;
+        if(state.evMode){int k=routeControls&&chosen.count>=4?0:chosen.count-1;activeKeys[k]=true;}
         for(int i=0;i<chosen.count;i++){TextView t=(TextView)bar.getChildAt(i);if(t.getCurrentTextColor()!=(activeKeys[i]||dark?Color.WHITE:0xff263238)||t.isSelected()!=activeKeys[i]||t.getBackground()==null){style(t,activeKeys[i],dark,size/2);t.setSelected(activeKeys[i]);}}
         if(!routeControls)return;
         NatPrediction.Snapshot matched=NatNavigationCard.matchesForecast(root,forecast)?forecast:null;

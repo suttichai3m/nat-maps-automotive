@@ -36,11 +36,29 @@ final class NatV36Shortcuts {
   new AlertDialog.Builder(a).setTitle(snow?"เลือก Snow AI":"เลือกเมนูรถ BYD").setItems(labels,(d,i)->launch(a,list.get(i))).setNegativeButton("ยกเลิก",null).show();
  }
  static void snow(Activity a){if(ready(a))select(a,true);}
+ private static ArrayList<ResolveInfo> overdrive(Activity a,boolean all){
+  ArrayList<ResolveInfo> out=new ArrayList<>();PackageManager pm=a.getPackageManager();
+  for(ResolveInfo r:pm.queryIntentActivities(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),0)){
+   if(r.activityInfo==null||!r.activityInfo.exported||!r.activityInfo.enabled||r.activityInfo.packageName.equals(a.getPackageName()))continue;
+   String label=String.valueOf(r.loadLabel(pm)).trim().toLowerCase(Locale.ROOT).replace(" ","");
+   if(all||label.equals("overdrive")||label.equals("overdrive+")||label.equals("overdriveplus"))out.add(r);
+  }return out;
+ }
+ private static String key(ResolveInfo r){return new ComponentName(r.activityInfo.packageName,r.activityInfo.name).flattenToString();}
+ private static void chooseOverDrive(Activity a,ArrayList<ResolveInfo> list){
+  if(list.isEmpty()){Toast.makeText(a,"ไม่พบแอปที่เปิดได้ • ตรวจสอบ OverDrive บนรถ",Toast.LENGTH_LONG).show();return;}
+  String[] labels=new String[list.size()];for(int i=0;i<labels.length;i++)labels[i]=list.get(i).loadLabel(a.getPackageManager())+" ("+list.get(i).activityInfo.packageName+")";
+  new AlertDialog.Builder(a).setTitle("เลือกแอป OverDrive • ตั้งค่าขณะจอด").setItems(labels,(d,i)->{ResolveInfo item=list.get(i);a.getSharedPreferences("nat_app_shortcuts",0).edit().putString("overdrive",key(item)).apply();launch(a,item);}).setNegativeButton("ยกเลิก",null).show();
+ }
+ static void configureOverDrive(Activity a){if(ready(a))chooseOverDrive(a,overdrive(a,true));}
  static void control(Activity a){
   if(!ready(a))return;
-  new AlertDialog.Builder(a).setTitle("Vehicle Control")
-   .setMessage("ใช้เมื่อจอดรถ\n\nล็อก / ปลดล็อก 4 ประตู\nกระจกไฟฟ้าทั้ง 4 บาน\nพับ / กางกระจกมองข้าง\nไฟอ่านหนังสือหน้า / หลัง\n\nคำสั่งโดยตรงยังไม่เปิดใช้งาน: ต้องยืนยันสิทธิ์ SDK, เกียร์ P และผลตอบกลับจากรถก่อน\nสามารถเปิดเมนู BYD หรือ Snow AI ที่ติดตั้งไว้ได้")
-   .setPositiveButton("เปิดเมนู BYD",(d,w)->select(a,false))
-   .setNeutralButton("Snow AI",(d,w)->select(a,true)).setNegativeButton("ปิด",null).show();
+  String saved=a.getSharedPreferences("nat_app_shortcuts",0).getString("overdrive","");
+  for(ResolveInfo item:overdrive(a,true))if(key(item).equals(saved)){launch(a,item);return;}
+  ArrayList<ResolveInfo> matches=overdrive(a,false);
+  if(matches.size()==1){launch(a,matches.get(0));return;}
+  if(!matches.isEmpty()){chooseOverDrive(a,matches);return;}
+  new AlertDialog.Builder(a).setTitle("OverDrive").setMessage("ไม่พบชื่อแอปโดยตรง • เลือกแอปที่ติดตั้งอยู่หนึ่งครั้ง").setPositiveButton("เลือกแอป",(d,w)->chooseOverDrive(a,overdrive(a,true))).setNegativeButton("ปิด",null).show();
  }
+
 }

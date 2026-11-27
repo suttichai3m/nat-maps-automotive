@@ -13,6 +13,15 @@ final class NatFavoriteRules {
   for(int i=0;i<s.length();i++)if(Character.isISOControl(s.charAt(i)))return null;
   return s;
  }
+ static int[] order(String saved){
+  int[] out=new int[SLOTS];for(int i=0;i<SLOTS;i++)out[i]=i;
+  if(saved==null)return out;String[] parts=saved.split(",",-1);if(parts.length!=SLOTS)return out;
+  boolean[] seen=new boolean[SLOTS];int[] parsed=new int[SLOTS];
+  try{for(int i=0;i<SLOTS;i++){int v=Integer.parseInt(parts[i]);if(v<0||v>=SLOTS||seen[v])return out;seen[v]=true;parsed[i]=v;}}catch(NumberFormatException ex){return out;}return parsed;
+ }
+ static double roundTrip(double current,double arrival){
+  return Double.isFinite(current)&&Double.isFinite(arrival)&&current>=0&&current<=100&&arrival<=current&&arrival>=-100?2*arrival-current:Double.NaN;
+ }
  static String name(String s){return clean(s,48);}
  static String destination(String s){return clean(s,256);}
  private static String encode(String s){

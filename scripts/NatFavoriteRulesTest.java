@@ -11,6 +11,12 @@ public final class NatFavoriteRulesTest {
   check(NatFavoriteRules.search("13.7,100.5").equals("geo:0,0?q=13.7%2C100.5"));
   check(NatFavoriteRules.search("ไทย").contains("%E0%B9%84"));
   check(!NatFavoriteRules.directions("Airport").contains("dir_action"));
+  check(NatFavoriteRules.order("7,6,5,4,3,2,1,0")[0]==7);
+  check(NatFavoriteRules.order("7,7,5,4,3,2,1,0")[0]==0);
+  check(NatFavoriteRules.order("broken")[7]==7);
+  check(NatFavoriteRules.roundTrip(80,60)==40);
+  check(NatFavoriteRules.roundTrip(80,30)==-20);
+  check(Double.isNaN(NatFavoriteRules.roundTrip(80,90)));
   System.out.println("PASS "+n+" favorite destination cases");
  }
 }

@@ -46,7 +46,7 @@ public final class NatNativeEvLayer {
     "EVCS MAIN • native eligible="+x.eligible+" • renderer requested="+x.shown;
  }
  /** UI click only; preserve provider eligibility and refresh using the native producer's own executor. */
- static boolean request(Activity activity){
+ static boolean request(Activity activity,boolean show){
   if(activity==null||activity.isFinishing()||activity.isDestroyed()||!activity.hasWindowFocus()||!BydBatteryPatch.isActive())return false;
   final Observation x=fresh();
   if(x==null)return false;
@@ -64,9 +64,11 @@ public final class NatNativeEvLayer {
   synchronized(LOCK){
    if(last!=x)return false;
    wasHidden=hidden.get()==producer;
-   if(!x.eligible&&!wasHidden)return false;
-   long now=SystemClock.elapsedRealtime();if(requestedAt>=0&&now-requestedAt<1200)return true;
-   requestedAt=now;ticket=++generation;nextHidden=!wasHidden&&x.shown;
+   if(show&&!x.eligible)return false;
+   if(x.shown==show&&wasHidden==!show)return true;
+   if(!show&&!x.shown&&!wasHidden)return true;
+   long now=SystemClock.elapsedRealtime();if(requestedAt>=0&&now-requestedAt<1200)return false;
+   requestedAt=now;ticket=++generation;nextHidden=!show;
    hidden=new WeakReference<>(nextHidden?producer:null);
   }
   try{

@@ -202,7 +202,7 @@ final class NatSplitScreen {
  private static void build(Activity a,State s,int width,int mapH,int footerH){
   s.dark=ColorScheme.nightColors(a);
   LinearLayout panel=vertical(a);panel.setTag(OWN);panel.setBackgroundColor(surface(s));panel.setPadding(dp(a,6),dp(a,5),dp(a,6),dp(a,4));s.panel=panel;
-  add(panel,text(a,"BYD SEAL  •  NAT V3.6",14,fg(s),true),dp(a,24));
+  add(panel,text(a,"BYD SEAL  •  NAT V3.7",14,fg(s),true),dp(a,24));
   s.hero=new ImageView(a);s.hero.setScaleType(ImageView.ScaleType.FIT_CENTER);
   s.hero.setContentDescription("BYD Seal blue, static studio image");s.hero.setImageBitmap(NatSealHero.bitmap());
   s.hero.setBackground(bg(a,0xff071522,0,8));s.hero.setClipToOutline(true);
@@ -240,8 +240,8 @@ final class NatSplitScreen {
   action(a,s,footer,"Snow AI",8,()->NatV36Shortcuts.snow(a));
   action(a,s,footer,"Smart EV",6,()->NatSmartEvMenu.show(a));
   s.evButton=action(a,s,footer,"EV Charging",0,()->NatMinimalEv.splitAction(a,0));
-  action(a,s,footer,"Control",7,()->NatV36Shortcuts.control(a));
-  action(a,s,footer,"Charging Plan",2,()->NatMinimalEv.splitAction(a,2));
+  action(a,s,footer,"OverDrive",7,()->NatV36Shortcuts.control(a));
+  action(a,s,footer,"Favorites",2,()->NatFavorites.show(a));
   action(a,s,footer,"Clean",3,()->NatMinimalEv.splitAction(a,3));
   action(a,s,footer,"Diagnostics",4,()->NatMinimalEv.splitAction(a,4));
   action(a,s,footer,"Full Map 100%",5,()->toggle(a));
