@@ -247,3 +247,39 @@ public class TestNatDiagnostics {
 JAVA
 javac --release 17 -encoding UTF-8 -d "$D" "$P/NatDiagnosticMath.java" "$D/TestNatDiagnostics.java"
 java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatDiagnostics
+
+cat > "$D/TestNatToolbar.java" <<'JAVA'
+package app.morphe.extension.mapsautomotive.patches;
+import java.util.function.Predicate;
+public class TestNatToolbar {
+ static int n; static void check(boolean ok){if(!ok)throw new AssertionError("Toolbar case "+(n+1));n++;}
+ static NatToolbarLayout.Slot choose(boolean map,boolean route,int w,int h,Predicate<NatToolbarLayout.Slot> free){return NatToolbarLayout.choose(map,route,0,0,w,h,48,7,12,free);}
+ public static void main(String[] args){
+  NatToolbarLayout.Slot a=choose(true,true,900,490,q->true);
+  check(a.count==5);check(a.vertical);check(a.w==48&&a.h==268);check(a.x==840&&a.y==107);
+  check(NatToolbarLayout.diagnosticIndex(a.count)==4);check(NatToolbarLayout.hasDiagnostics(a.count));
+  a=choose(true,true,900,490,q->q.x<100);check(a.count==5&&a.x==12);
+  a=choose(true,true,900,490,q->!q.vertical);check(a.count==5&&!a.vertical&&a.w==268&&a.h==48);
+  a=choose(true,true,900,490,q->q.count==4);check(a.count==4);check(a.vertical&&a.h==213);check(a.x==840&&a.y==107);check(!NatToolbarLayout.hasDiagnostics(a.count));check(NatToolbarLayout.diagnosticIndex(a.count)==-1);
+  a=choose(true,true,900,490,q->q.count==4&&!q.vertical);check(a.count==4&&!a.vertical&&a.w==213);
+  a=choose(true,true,250,250,q->true);check(a.count==4);
+  check(choose(true,true,200,200,q->true)==null);
+  check(choose(true,true,900,490,q->false)==null);
+  a=choose(true,false,900,490,q->true);check(a.count==1&&a.w==48&&a.h==48);check(NatToolbarLayout.diagnosticIndex(a.count)==0);check(NatToolbarLayout.hasDiagnostics(a.count));
+  a=choose(true,false,900,490,q->q.x<100);check(a.count==1&&a.x==12);
+  check(choose(true,false,900,490,q->false)==null);
+  check(choose(false,true,900,490,q->true)==null);check(choose(false,false,900,490,q->true)==null);
+  check(choose(true,false,0,490,q->true)==null);check(choose(true,false,60,40,q->true)==null);
+  a=NatToolbarLayout.choose(true,true,100,50,1000,540,48,7,12,q->true);check(a.x==940&&a.y==157&&a.count==5);
+  a=NatToolbarLayout.choose(true,true,0,0,1800,980,96,14,24,q->true);check(a.w==96&&a.h==536&&a.count==5);
+  check(NatToolbarLayout.choose(true,true,0,0,900,490,0,7,12,q->true)==null);
+  check(NatToolbarLayout.choose(true,true,0,0,900,490,48,-1,12,q->true)==null);
+  check(NatToolbarLayout.choose(true,true,0,0,900,490,48,7,-1,q->true)==null);
+  check(NatToolbarLayout.choose(true,true,0,0,900,490,48,7,12,null)==null);
+  check(!NatToolbarLayout.hasDiagnostics(0));check(NatToolbarLayout.diagnosticIndex(3)==-1);
+  System.out.println("PASS: "+n+" NAT V2.0.4 toolbar layout cases");
+ }
+}
+JAVA
+javac --release 17 -encoding UTF-8 -d "$D" "$P/NatToolbarLayout.java" "$D/TestNatToolbar.java"
+java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatToolbar

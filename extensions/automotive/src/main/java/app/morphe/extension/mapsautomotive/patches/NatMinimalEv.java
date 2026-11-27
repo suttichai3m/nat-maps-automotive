@@ -155,6 +155,18 @@ final class NatMinimalEv {
     private static void style(TextView t,boolean active,boolean dark,int radius){
         t.setBackground(background(active?0xff16805c:dark?0xff20303a:0xffffffff,radius));t.setTextColor(active||dark?Color.WHITE:0xff263238);
     }
+    private static TextView diagnosticsButton(Activity a,State s){
+        TextView t=button(a,"ⓘ","System Diagnostics — CPU / RAM / GPS",()->{
+            View root=a.getWindow().peekDecorView();
+            if(a.isFinishing()||a.isDestroyed()||!a.hasWindowFocus()||root==null
+                    ||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY)||!controls(root).mapControls)return;
+            s.mode=0;removePanel(s);
+            // No native search, Back, navigation or vehicle action here.
+            NatSystemDiagnostics.show(a);
+        });
+        t.setTooltipText("System Diagnostics — CPU / RAM / GPS");
+        return t;
+    }
     private static void switchPanel(Activity a,State s,int which){
         s.mode=s.mode==which?0:which;removePanel(s);View root=a.getWindow().peekDecorView();if(root!=null)refresh(a,root);
     }
@@ -288,28 +300,35 @@ final class NatMinimalEv {
         if(fresh&&state.previousSession>=0&&state.previousSession!=forecast.session)resetSearch(state);
         state.previousFresh=fresh;state.previousStops=stops;if(fresh)state.previousSession=forecast.session;
         updateSearch(state,c);
-        if(!c.mapControls||(!route&&!ownedSearch(state)&&!(android.os.SystemClock.elapsedRealtime()<=state.categoryUntil))){clear(a);return;}
+        boolean routeControls=route||ownedSearch(state)||android.os.SystemClock.elapsedRealtime()<=state.categoryUntil;
+        if(!c.mapControls){clear(a);return;}
         Rect bounds=new Rect();if(!host.getGlobalVisibleRect(bounds)){clear(a);return;}
-        int size=dp(a,48),gap=dp(a,7),edge=dp(a,12),length=size*4+gap*3;
-        Rect slot=null;boolean vertical=true;
-        for(int orientation=0;orientation<2&&slot==null;orientation++)for(int side=0;side<2&&slot==null;side++)for(float fy:new float[]{.22f,.34f,.10f,.46f}){
-            int w=orientation==0?size:length,h=orientation==0?length:size;
-            int x=side==0?bounds.right-edge-w:bounds.left+edge;
-            int y=bounds.top+(int)(bounds.height()*fy);Rect r=new Rect(x,y,x+w,y+h);
-            if(bounds.contains(r)&&free(views,r,host)){slot=r;vertical=orientation==0;break;}
-        }
-        if(slot==null){clear(a);report(state,"Toolbar unavailable: native controls protected");return;}
+        int size=dp(a,48),gap=dp(a,7),edge=dp(a,12);
+        NatToolbarLayout.Slot chosen=NatToolbarLayout.choose(c.mapControls,routeControls,
+                bounds.left,bounds.top,bounds.right,bounds.bottom,size,gap,edge,
+                q->free(views,new Rect(q.x,q.y,q.x+q.w,q.y+q.h),host));
+        if(chosen==null){clear(a);report(state,"Toolbar unavailable: native controls protected");return;}
+        Rect slot=new Rect(chosen.x,chosen.y,chosen.x+chosen.w,chosen.y+chosen.h);
+        boolean vertical=chosen.vertical;
+        if(!routeControls){state.mode=0;removePanel(state);removeMini(state,true);removeMini(state,false);}
         boolean active=unique(c.hide)!=null||(ownedSearch(state)&&c.evEvidence);boolean dark=ColorScheme.nightColors(a);
         android.widget.LinearLayout bar=state.toolbar==null?null:state.toolbar.get();
-        if(bar==null||bar.getParent()!=host||state.vertical!=vertical){
+        if(bar==null||bar.getParent()!=host||state.vertical!=vertical||bar.getChildCount()!=chosen.count){
             remove(bar);bar=column(a);bar.setOrientation(vertical?1:0);bar.setElevation(dp(a,5));
-            TextView[] keys={button(a,"⚡","EV Charging",()->act(a,owner,false)),button(a,"↗","Energy Prediction",()->switchPanel(a,owner,1)),button(a,"☷","Charging Plan",()->switchPanel(a,owner,2)),button(a,"⊘","Clean Mode",()->{act(a,owner,true);refresh(a,a.getWindow().peekDecorView());})};
+            TextView[] keys;
+            if(chosen.count==1)keys=new TextView[]{diagnosticsButton(a,owner)};
+            else {
+                TextView[] original={button(a,"⚡","EV Charging",()->act(a,owner,false)),button(a,"↗","Energy Prediction",()->switchPanel(a,owner,1)),button(a,"☷","Charging Plan",()->switchPanel(a,owner,2)),button(a,"⊘","Clean Mode",()->{act(a,owner,true);refresh(a,a.getWindow().peekDecorView());})};
+                keys=java.util.Arrays.copyOf(original,chosen.count);
+                if(NatToolbarLayout.hasDiagnostics(chosen.count))keys[NatToolbarLayout.diagnosticIndex(chosen.count)]=diagnosticsButton(a,owner);
+            }
             for(int i=0;i<keys.length;i++){android.widget.LinearLayout.LayoutParams lp=new android.widget.LinearLayout.LayoutParams(size,size);if(i>0){if(vertical)lp.topMargin=gap;else lp.leftMargin=gap;}bar.addView(keys[i],lp);}
             put(host,bar,slot,true);state.toolbar=new WeakReference<>(bar);state.vertical=vertical;
         }else if(state.left!=slot.left||state.top!=slot.top)put(host,bar,slot,false);
         state.left=slot.left;state.top=slot.top;
-        boolean[] activeKeys={active,state.mode==1,state.mode==2,false};
-        for(int i=0;i<4;i++){TextView t=(TextView)bar.getChildAt(i);if(t.getCurrentTextColor()!=(activeKeys[i]||dark?Color.WHITE:0xff263238)||t.isSelected()!=activeKeys[i]||t.getBackground()==null){style(t,activeKeys[i],dark,size/2);t.setSelected(activeKeys[i]);}}
+        boolean[] activeKeys=chosen.count==1?new boolean[]{false}:new boolean[]{active,state.mode==1,state.mode==2,false,false};
+        for(int i=0;i<chosen.count;i++){TextView t=(TextView)bar.getChildAt(i);if(t.getCurrentTextColor()!=(activeKeys[i]||dark?Color.WHITE:0xff263238)||t.isSelected()!=activeKeys[i]||t.getBackground()==null){style(t,activeKeys[i],dark,size/2);t.setSelected(activeKeys[i]);}}
+        if(!routeControls)return;
         NatPrediction.Snapshot matched=NatNavigationCard.matchesForecast(root,forecast)?forecast:null;
         showPanel(a,host,state,views,bounds,slot,dark,matched);
         NatLiveEnergy.Reading live=NatPrediction.liveReading();
