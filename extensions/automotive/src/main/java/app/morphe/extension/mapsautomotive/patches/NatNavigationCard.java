@@ -160,6 +160,7 @@ final class NatNavigationCard {
     static boolean hasVerifiedRoute(View root) { List<Match> m=matches(root); return m.size()==1 && m.get(0).panel!=null; }
     private static final WeakHashMap<View,Long> VERIFIED=new WeakHashMap<>();
     static boolean recentlyVerified(View root){Long t=VERIFIED.get(root);return t!=null&&android.os.SystemClock.elapsedRealtime()-t<=2000;}
+    static boolean reserves(View root,Rect global){Card c=CARDS.get(root);if(c==null)return false;Rect r=new Rect(c.getBounds());Point offset=new Point();if(!root.getGlobalVisibleRect(new Rect(),offset))return true;r.offset(offset.x,offset.y);return Rect.intersects(r,global);}
     // Measure the actual rendered text, not the width of a match-parent TextView.
     // Layout selection includes ReplacementSpan/emoji widths. Unknown layout fails closed.
     private static Rect textRange(TextView tv,int start,int end) {
@@ -249,7 +250,7 @@ final class NatNavigationCard {
     // The only native content we may visually replace is the complete, verified SOC text.
     // Never intercept touches; protect other text and controls even inside the status panel.
     private static boolean blocked(View v, Rect area, Match match, Rect[] source,View removable,int depth) {
-        if(v==removable || depth>40 || !v.isShown()) return false;
+        if(v==removable || NatMinimalEv.owned(v) || depth>40 || !v.isShown()) return false;
         Rect r=new Rect();
         if(!v.getGlobalVisibleRect(r) || !Rect.intersects(r,area)) return false;
         if(v==match.anchor && source!=null && !v.isClickable() && !v.isLongClickable() && !hasDrawable(match.anchor)) {
@@ -338,6 +339,7 @@ final class NatNavigationCard {
         syncIcon(c,match,regions[0]);
         // A next-leg summary must never be silently relabelled as the final destination.
         double km=NatArrivalUi.routeKm(tv.getText());
+        if(!Double.isFinite(km)&&match.panel!=null){ArrayList<TextView> parts=new ArrayList<>();collect(match.panel,parts,0);int count=0;for(TextView part:parts){double k=NatArrivalUi.routeKm(part.getText());if(Double.isFinite(k)){km=k;count++;}}if(count!=1)km=Double.NaN;}
         NatPrediction.Snapshot f=NatPrediction.freshSnapshot();
         boolean finalKnown=f!=null&&NatStabilityMath.matches(soc,km,f.google,f.km);
         boolean nextKnown=f!=null&&f.charges>0&&NatStabilityMath.matches(soc,km,f.next,f.nextKm)&&!finalKnown;

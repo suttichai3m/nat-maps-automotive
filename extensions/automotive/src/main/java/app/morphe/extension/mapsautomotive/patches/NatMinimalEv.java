@@ -23,7 +23,9 @@ final class NatMinimalEv {
     private static final String PREF="nat_minimal_ev";
     private static final WeakHashMap<Activity,State> STATES=new WeakHashMap<>();
     private static final class State {
-        WeakReference<android.widget.LinearLayout> toolbar,panel;
+        WeakReference<android.widget.LinearLayout> toolbar,panel,current,remaining;
+        String currentKey="",remainingKey="";
+        long categoryUntil=-1;
         boolean opened,previousFresh;
         int previousStops=-1,mode=0;
         long openedAt=-1;
@@ -102,18 +104,20 @@ final class NatMinimalEv {
         Controls c=controls(root);boolean route=NatNavigationCard.hasVerifiedRoute(root);
         state.mode=0;removePanel(state);
         if(clean){
-            if(ownedSearch(state)&&!hideNative(state,c,false)&&c.results)toast(a,"ปิดผลค้นหา EV ด้วยปุ่มของ Maps");
+            if((ownedSearch(state)||unique(c.hide)!=null)&&!hideNative(state,c,false)&&c.results)toast(a,"ปิดผลค้นหา EV ด้วยปุ่มของ Maps");
             report(state,"Clean mode: NAT panels closed; native route retained");return;
         }
         if(hideNative(state,c,false))return;
         if(ownedSearch(state)&&c.results){toast(a,"ใช้ปุ่มปิดผลค้นหาของ Maps");return;}
         View open=unique(c.open),along=unique(c.along);
-        if(route&&open!=null&&!c.results){if(open.performClick()){state.opened=true;state.openedAt=android.os.SystemClock.elapsedRealtime();report(state,"Native EV category requested");}return;}
-        if(route&&along!=null&&!c.results){if(along.performClick())toast(a,"เลือกหมวดการชาร์จ EV");return;}
+        boolean pending=android.os.SystemClock.elapsedRealtime()<=state.categoryUntil&&c.mapControls;
+        if((route||pending)&&open!=null&&!c.results){if(open.performClick()){state.opened=true;state.categoryUntil=-1;state.openedAt=android.os.SystemClock.elapsedRealtime();report(state,"Native EV category requested");}return;}
+        if(route&&along!=null&&!c.results){if(along.performClick()){state.categoryUntil=android.os.SystemClock.elapsedRealtime()+30000;toast(a,"เลือกหมวดการชาร์จ EV ใน Maps");}return;}
         toast(a,"เปิดค้นหาตามเส้นทางใน Maps แล้วเลือก EV");report(state,"Native EV action unavailable; no route change");
     }
     /** No overlay if it could cover another visible native control or label. */
     private static boolean free(List<View> views,Rect slot,View host){
+        if(NatNavigationCard.reserves(host.getRootView(),slot))return false;
         for(View v:views){
             if(v==host)continue;
             Rect r=new Rect();if(!v.getGlobalVisibleRect(r)||!Rect.intersects(r,slot))continue;
@@ -130,7 +134,7 @@ final class NatMinimalEv {
     private static void remove(View v){if(v!=null&&v.getParent() instanceof ViewGroup)((ViewGroup)v.getParent()).removeView(v);}
     private static void removePanel(State s){remove(s.sheet());s.panel=null;s.rendered="";}
     static void clear(Activity a){
-        State s=STATES.get(a);if(s==null)return;remove(s.host());removePanel(s);s.toolbar=null;s.left=s.top=-1;s.mode=0;
+        State s=STATES.get(a);if(s==null)return;remove(s.host());removePanel(s);removeMini(s,true);removeMini(s,false);s.toolbar=null;s.left=s.top=-1;s.mode=0;
     }
     private static android.widget.LinearLayout column(Context a){android.widget.LinearLayout l=new android.widget.LinearLayout(a);l.setTag(OWN);l.setOrientation(android.widget.LinearLayout.VERTICAL);return l;}
     private static int dp(Context a,int v){return Math.round(v*a.getResources().getDisplayMetrics().density);}
@@ -168,13 +172,16 @@ final class NatMinimalEv {
             if(bounds.contains(q)&&!Rect.intersects(toolbarSlot,q)&&free(views,q,host)){slot=q;break;}
         }
         if(slot==null){removePanel(s);s.mode=0;toast(a,"ไม่พบพื้นที่ปลอดภัย ใช้เมนู BYD Battery Settings");report(s,"Panel unavailable: native controls protected");return;}
-        double observed=NatPrediction.observedKwh(),cost=NatStabilityMath.cost(observed,tariff(a));
+        NatLiveEnergy.Reading live=NatPrediction.liveReading();
+        double observed=live.net,cost=NatStabilityMath.cost(observed,tariff(a));
+        String power=number(live.power,"kW"), actualRate=number(live.rate,"kWh/100 km"),increase=number(live.increase,"kWh"),coverage=number(live.km,"km");
+        String powerState=!Double.isFinite(live.power)?"ไม่มีข้อมูล":live.power>0?"แบตจ่ายพลังงาน":live.power<0?"พลังงานแบตเพิ่ม":"การเปลี่ยนแปลงสุทธิเป็นศูนย์";
         String remaining=f==null?"—":number(f.remainingKwh,"kWh");
         String rate=f==null?"—":number(NatStabilityMath.rate(f.remainingKwh,f.km),"kWh/100 km");
         String used=number(observed,"kWh"),money=number(cost,"THB");
         String plan=f==null?"ไม่มี forecast สดจาก Maps":f.charges==0?"ยังไม่มีจุดชาร์จใน forecast":("แผนจาก Maps (ไม่มีชื่อสถานี)"+f.plan);
         String arrival=f==null?"—":f.google+"%";
-        String signature=s.mode+"|"+dark+"|"+remaining+"|"+rate+"|"+used+"|"+money+"|"+plan+"|"+arrival+"|"+slot.toShortString();
+        String signature=s.mode+"|"+dark+"|"+remaining+"|"+rate+"|"+used+"|"+money+"|"+plan+"|"+arrival+"|"+power+"|"+actualRate+"|"+increase+"|"+coverage+"|"+powerState+"|"+slot.toShortString();
         if(signature.equals(s.rendered)&&s.sheet()!=null)return;
         removePanel(s);s.rendered=signature;
         int fg=dark?0xffedf4f7:0xff263238, muted=dark?0xffbacbd3:0xff546a74;
@@ -184,22 +191,63 @@ final class NatMinimalEv {
         TextView close=button(a,"×","ปิดหน้าต่าง",()->{s.mode=0;removePanel(s);refresh(a,a.getWindow().peekDecorView());});close.setTextColor(fg);header.addView(close,new android.widget.LinearLayout.LayoutParams(dp(a,44),dp(a,40)));box.addView(header);
         android.widget.ScrollView scroll=new android.widget.ScrollView(a);scroll.setTag(OWN);android.widget.LinearLayout content=column(a);scroll.addView(content);box.addView(scroll,new android.widget.LinearLayout.LayoutParams(-1,0,1));
         if(s.mode==1){
-            String[] labels={"พลังงานที่ต้องใช้อีก","อัตราสิ้นเปลืองเฉลี่ยตาม forecast","พลังงานสุทธิที่สังเกตได้","ค่าไฟประมาณการ"};
-            String[] values={remaining,rate,used,money};
-            for(int i=0;i<4;i+=2){
+            content.addView(line(a,"LIVE POWER • ค่าเฉลี่ยช่วงตัวอย่าง",12,muted));
+            content.addView(line(a,power+" · "+powerState,20,fg));
+            if(Double.isFinite(live.power)){
+                android.widget.ProgressBar gauge=new android.widget.ProgressBar(a,null,android.R.attr.progressBarStyleHorizontal);gauge.setTag(OWN);gauge.setMax(500);gauge.setProgress((int)Math.round(live.power+250));content.addView(gauge,new android.widget.LinearLayout.LayoutParams(-1,dp(a,12)));
+                content.addView(line(a,"− เพิ่มพลังงาน     0     + จ่ายพลังงาน (kW)",10,muted));
+            }
+            String[] labels={"พลังงานสุทธิที่สังเกตได้","พลังงานที่ต้องใช้อีก","สิ้นเปลืองจากช่วงที่มีเลขไมล์","พลังงานเพิ่มขณะเคลื่อนที่","สิ้นเปลืองตาม forecast","ค่าไฟประมาณการ"};
+            String[] values={used,remaining,actualRate,increase,rate,money};
+            for(int i=0;i<labels.length;i+=2){
                 android.widget.LinearLayout row=new android.widget.LinearLayout(a);row.setTag(OWN);
                 for(int j=i;j<i+2;j++){android.widget.LinearLayout cell=column(a);cell.setPadding(dp(a,5),dp(a,3),dp(a,5),dp(a,3));cell.addView(line(a,labels[j],11,muted));cell.addView(line(a,values[j],19,fg));row.addView(cell,new android.widget.LinearLayout.LayoutParams(0,-2,1));}
                 content.addView(row);
             }
             content.addView(line(a,f==null?"ไม่มี forecast สด":f.charges>0?"ประมาณจากพลังงานและจุดชาร์จขั้นต่ำใน Maps":"ประมาณจาก Wh ของ BYD และ Maps",11,muted));
-            content.addView(line(a,"พลังงานที่ใช้: เฉพาะช่วงขับที่ได้รับข้อมูล ไม่ใช่ยอดทั้งเที่ยว",11,muted));
+            content.addView(line(a,"ช่วงที่มีเลขไมล์: "+coverage+" • ไม่ใช่ยอดทั้งเที่ยว • พลังงานเพิ่มไม่ใช่ค่า Regen ที่ยืนยันแล้ว",11,muted));
             android.widget.Button set=new android.widget.Button(a);set.setTag(OWN);set.setText("ตั้งค่าไฟ");set.setOnClickListener(v->editTariff(a,s));content.addView(set);
         }else{
             content.addView(line(a,plan,14,fg));content.addView(line(a,"แบตปลายทางตาม Maps: "+arrival,15,fg));
             android.widget.Button search=new android.widget.Button(a);search.setTag(OWN);search.setText("ค้นหาจุดชาร์จตามเส้นทาง");search.setOnClickListener(v->act(a,s,false));content.addView(search);
-            content.addView(line(a,"ให้ Maps คำนวณใหม่หลังเพิ่มจุดแวะ • ไม่มีข้อมูลสถานีสำหรับแนะนำอัตโนมัติ",11,muted));
+            content.addView(line(a,"รายการสถานี / กำลังหัวชาร์จ / จำนวนหัวว่าง: ใช้ผลค้นหาและหน้ารายละเอียด Native Maps เท่านั้น เมื่อ Maps มีข้อมูล",11,muted));
+            content.addView(line(a,"ให้ Maps คำนวณใหม่หลังเพิ่มจุดแวะ • ยังไม่แนะนำสถานีอัตโนมัติ",11,muted));
         }
         put(host,box,slot,true);s.panel=new WeakReference<>(box);
+    }
+    private static void removeMini(State s,boolean current){
+        WeakReference<android.widget.LinearLayout> ref=current?s.current:s.remaining;
+        if(ref!=null)remove(ref.get());
+        if(current){s.current=null;s.currentKey="";}else{s.remaining=null;s.remainingKey="";}
+    }
+    private static boolean nativeCurrent(List<View> views){
+        for(View v:views)if(v instanceof TextView){
+            String t=NatMinimalEvRules.norm(((TextView)v).getText()),d=NatMinimalEvRules.norm(v.getContentDescription());
+            if(t.startsWith("current battery")||t.startsWith("แบตเตอรี่ปัจจุบัน")||t.startsWith("แบตปัจจุบัน")||d.startsWith("current battery")||d.startsWith("แบตเตอรี่ปัจจุบัน"))return true;
+        }
+        return false;
+    }
+    private static Rect global(View v){Rect r=new Rect();return v!=null&&v.getGlobalVisibleRect(r)?r:null;}
+    private static void mini(Activity a,FrameLayout host,State s,List<View> views,Rect bounds,Rect toolbar,boolean dark,boolean current,String value){
+        if(current&&nativeCurrent(views)){removeMini(s,true);return;}
+        if(!current&&s.mode!=1){removeMini(s,false);return;}
+        int w=dp(a,current?142:166),h=dp(a,58),edge=dp(a,12);
+        Rect slot=null,panel=global(s.sheet()),other=global(current?(s.remaining==null?null:s.remaining.get()):(s.current==null?null:s.current.get()));
+        for(float y:current?new float[]{.035f,.12f,.19f}:new float[]{.82f,.72f,.64f})for(int side=0;side<3&&slot==null;side++){
+            int x=side==0?(current?bounds.right-edge-w:bounds.centerX()-w/2):side==1?bounds.left+edge:bounds.right-edge-w;
+            int top=bounds.top+(int)(bounds.height()*y);Rect q=new Rect(x,top,x+w,top+h);
+            if(bounds.contains(q)&&!Rect.intersects(toolbar,q)&&(panel==null||!Rect.intersects(panel,q))&&(other==null||!Rect.intersects(other,q))&&free(views,q,host))slot=q;
+        }
+        if(slot==null){removeMini(s,current);return;}
+        String key=dark+"|"+value+"|"+slot.toShortString(),old=current?s.currentKey:s.remainingKey;
+        WeakReference<android.widget.LinearLayout> ref=current?s.current:s.remaining;
+        if(key.equals(old)&&ref!=null&&ref.get()!=null&&ref.get().getParent()==host)return;
+        removeMini(s,current);
+        android.widget.LinearLayout box=column(a);box.setGravity(Gravity.CENTER);box.setBackground(background(dark?0xff20303a:Color.WHITE,dp(a,9)));box.setElevation(dp(a,4));
+        TextView label=line(a,current?"แบตเตอรี่ปัจจุบัน":"พลังงานที่ต้องใช้อีก",11,dark?0xffbacbd3:0xff546a74);label.setGravity(Gravity.CENTER);
+        TextView metric=line(a,value,25,dark?Color.WHITE:0xff263238);metric.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);metric.setGravity(Gravity.CENTER);
+        box.addView(label);box.addView(metric);put(host,box,slot,true);
+        if(current){s.current=new WeakReference<>(box);s.currentKey=key;}else{s.remaining=new WeakReference<>(box);s.remainingKey=key;}
     }
     static void refresh(Activity a,View root){
         if(root==null||!enabled(a)||!root.hasWindowFocus()||!SafeMode.on(a,SafeMode.BYD_BATTERY)){clear(a);return;}
@@ -216,7 +264,7 @@ final class NatMinimalEv {
         }
         state.previousFresh=fresh;state.previousStops=stops;
         if(!ownedSearch(state)||(!c.results&&!c.evEvidence&&unique(c.hide)==null&&unique(c.open)!=null))state.opened=false;
-        if(!c.mapControls||(!route&&!ownedSearch(state)&&!fresh)){clear(a);return;}
+        if(!c.mapControls||(!route&&!ownedSearch(state)&&!(android.os.SystemClock.elapsedRealtime()<=state.categoryUntil))){clear(a);return;}
         Rect bounds=new Rect();if(!host.getGlobalVisibleRect(bounds)){clear(a);return;}
         int size=dp(a,48),gap=dp(a,7),edge=dp(a,12),length=size*4+gap*3;
         Rect slot=null;boolean vertical=true;
@@ -239,5 +287,9 @@ final class NatMinimalEv {
         boolean[] activeKeys={active,state.mode==1,state.mode==2,false};
         for(int i=0;i<4;i++){TextView t=(TextView)bar.getChildAt(i);if(t.getCurrentTextColor()!=(activeKeys[i]||dark?Color.WHITE:0xff263238)||t.isSelected()!=activeKeys[i]||t.getBackground()==null){style(t,activeKeys[i],dark,size/2);t.setSelected(activeKeys[i]);}}
         showPanel(a,host,state,views,bounds,slot,dark,forecast);
+        NatLiveEnergy.Reading live=NatPrediction.liveReading();
+        if(route){mini(a,host,state,views,bounds,slot,dark,true,Double.isFinite(live.soc)?Math.round(live.soc)+"%":"—");
+            mini(a,host,state,views,bounds,slot,dark,false,forecast==null?"—":number(forecast.remainingKwh,"kWh"));}
+        else{removeMini(state,true);removeMini(state,false);}
     }
 }

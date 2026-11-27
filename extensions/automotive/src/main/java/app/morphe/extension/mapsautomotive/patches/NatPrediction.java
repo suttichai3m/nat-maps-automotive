@@ -10,28 +10,28 @@ import java.util.Locale;
 /** Independent planning estimate; never changes Maps or vehicle data. */
 final class NatPrediction {
     private static volatile Snapshot snapshot;
-    private static final NatStabilityMath.Observed observed=new NatStabilityMath.Observed();
-    private static boolean observedActive;
+    private static final NatLiveEnergy live=new NatLiveEnergy();
     static synchronized void observe(BydDriveLog.Sample s){
-        boolean active=freshSnapshot()!=null;
-        if(!active||!observedActive)observed.reset();
-        observedActive=active;if(active)observed.observe(s.energyWh,s.elapsed,s.speedKmh);
+        live.accept(s.elapsed,s.soc,s.energyWh,s.mileage01km,s.speedKmh,freshSnapshot()!=null);
     }
-    static synchronized double observedKwh(){return observedActive&&freshSnapshot()!=null&&observed.pairs>0?observed.net:Double.NaN;}
+    static synchronized NatLiveEnergy.Reading liveReading(){return live.read(SystemClock.elapsedRealtime(),freshSnapshot()!=null);}
+    static synchronized double observedKwh(){return liveReading().net;}
     static Snapshot freshSnapshot(){Snapshot s=snapshot;return s!=null&&BydBatteryPatch.isActive()&&NatStabilityMath.fresh(SystemClock.elapsedRealtime(),s.at)?s:null;}
-    static synchronized void clear(){snapshot=null;observed.reset();observedActive=false;}
+    static synchronized void clear(){snapshot=null;live.endRoute();}
     static final class Snapshot {
         final long at; final double soc, capacity, km; final int google, charges; final String plan; final int next; final double nextKm; final double remainingKwh;
         Snapshot(double s,double c,double d,int g,int n,String plan,int next,double nextKm,double remainingKwh) { at=SystemClock.elapsedRealtime(); soc=s; capacity=c; km=d; google=g; charges=n; this.plan=plan; this.next=next; this.nextKm=nextKm; this.remainingKwh=remainingKwh; }
     }
     static synchronized void capture(BydForecast.Forecast f, double soc, int capacityWh,int currentWh) {
         if (f.isEmpty() || !Double.isFinite(soc) || capacityWh <= 0 || f.finalArrivalWh()==BydForecast.NO_ENERGY) { clear(); return; }
-        StringBuilder plan=new StringBuilder(); int i=0; long minimumAdded=0; boolean complete=true;
-        for(BydForecast.Stop stop:f.stops) if(stop.charging) {
+        StringBuilder plan=new StringBuilder(); int i=0; long minimumAdded=0,cumulativeM=0; boolean complete=true;
+        for(BydForecast.Stop stop:f.stops) { cumulativeM+=Math.max(0,stop.distanceM); if(!stop.charging)continue;
             if(!stop.hasArrival||stop.arrivalWh<0||stop.minDepartureWh<=0||stop.minDepartureWh<stop.arrivalWh||stop.minDepartureWh>capacityWh)complete=false;
             else minimumAdded+=(long)stop.minDepartureWh-stop.arrivalWh;
             plan.append("\nจุดชาร์จ ").append(++i).append(": ").append(stop.hasArrival?energyPercent(stop.arrivalWh,capacityWh):"?").append(" → ").append(stop.minDepartureWh>0?energyPercent(stop.minDepartureWh,capacityWh):"?").append(" (ขั้นต่ำ)");
             if(stop.chargeTimeS>0) plan.append(" · ").append(Math.round(stop.chargeTimeS/60.0)).append(" นาที");
+            if(stop.chargePowerW>0)plan.append(" · ").append(fmt(stop.chargePowerW/1000.0)).append(" kW (forecast)");
+            if(cumulativeM>0)plan.append(" · ").append(fmt(cumulativeM/1000.0)).append(" กม.");
         }
         BydForecast.Stop first=f.stops.get(0);
         snapshot=new Snapshot(soc,capacityWh/1000.0,f.totalDistanceM()/1000.0,signed(f.finalArrivalWh(),capacityWh),f.chargeStops(),plan.toString(),first.hasArrival?signed(first.arrivalWh,capacityWh):Integer.MIN_VALUE,first.distanceM/1000.0,NatStabilityMath.remainingKwh(currentWh,f.finalArrivalWh(),minimumAdded,complete));

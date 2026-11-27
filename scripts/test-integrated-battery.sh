@@ -153,3 +153,38 @@ public class TestNatStability {
 JAVA
 javac --release 17 -encoding UTF-8 -d "$D" "$P/NatStabilityMath.java" "$D/TestNatStability.java"
 java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatStability
+
+cat > "$D/TestNatLiveEnergy.java" <<'JAVA'
+package app.morphe.extension.mapsautomotive.patches;
+public class TestNatLiveEnergy {
+ static int n;static void check(boolean x){if(!x)throw new AssertionError("Live case "+n);n++;}
+ static boolean near(double a,double b){return Math.abs(a-b)<1e-6;}
+ public static void main(String[] args){
+  NatLiveEnergy e=new NatLiveEnergy();
+  check(Double.isNaN(e.read(0,true).soc));check(Double.isNaN(e.read(0,true).net));
+  e.accept(10000,82,65000,1000,50,true);
+  check(near(e.read(10000,true).soc,82));check(Double.isNaN(e.read(10000,true).power));
+  e.accept(20000,81,64900,1001,50,true);
+  NatLiveEnergy.Reading r=e.read(20000,true);
+  check(near(r.power,36));check(near(r.net,.1));check(near(r.rate,100));check(near(r.km,.1));check(near(r.increase,0));check(r.pairs==1);
+  e.accept(30000,81,64950,1002,50,true);r=e.read(30000,true);
+  check(near(r.power,-18));check(near(r.net,.05));check(near(r.increase,.05));check(near(r.rate,25));
+  e.accept(40000,82,66000,1002,0,true);r=e.read(40000,true);
+  check(Double.isNaN(r.power));check(near(r.net,.05));check(near(r.increase,.05));
+  e.accept(50000,82,65900,1003,50,true);check(e.read(50000,true).pairs==2);
+  e.accept(90000,82,65500,1005,50,true);check(e.read(90000,true).pairs==2);
+  e.accept(100000,81,60000,1006,50,true);check(Double.isNaN(e.read(100000,true).power));check(e.read(100000,true).pairs==2);
+  e.accept(110000,81,59900,-1,50,true);r=e.read(110000,true);check(near(r.net,.15));check(near(r.rate,25));
+  check(Double.isNaN(e.read(140001,true).soc));check(Double.isNaN(e.read(140001,true).net));
+  e.accept(120000,80,59800,1007,50,false);check(near(e.read(120000,false).soc,80));check(Double.isNaN(e.read(120000,false).net));
+  e.accept(130000,80,59700,1008,50,true);check(Double.isNaN(e.read(130000,true).net));
+  e.accept(125000,99,59700,1008,50,true);check(near(e.read(130000,true).soc,80));
+  e.accept(140000,101,59600,1009,50,true);check(Double.isNaN(e.read(140000,true).soc));
+  e.endRoute();check(Double.isNaN(e.read(140000,true).net));
+  check(!NatLiveEnergy.fresh(0,1));check(!NatLiveEnergy.moving(251));
+  System.out.println("PASS: "+n+" NAT live energy cases");
+ }
+}
+JAVA
+javac --release 17 -encoding UTF-8 -d "$D" "$P/NatLiveEnergy.java" "$D/TestNatLiveEnergy.java"
+java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatLiveEnergy

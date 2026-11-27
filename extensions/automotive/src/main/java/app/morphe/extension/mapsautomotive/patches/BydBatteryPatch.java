@@ -705,8 +705,8 @@ public final class BydBatteryPatch {
             // with the adjusted model also its traction factor and auxiliary power (":A1.046/868").
             record.model = file == null ? "fallback" : file.name + ":" + file.drainAtTimeText(bydTemperature(file, outsideC))
                     + ":m" + massKg(file) + (adjustedSent ? String.format(Locale.ROOT, ":A%.3f/%d", sentFactor, sentAuxW) : "");
-            BydDriveLog.sample(record);
             try { NatPrediction.observe(record); } catch (RuntimeException ignored) { /* optional energy summary */ }
+            BydDriveLog.sample(record);
             try { NatTripTimeline.sample(context, record); } catch (RuntimeException ignored) { /* optional recorder */ }
         } catch (Throwable error) {
             if (recordFailures++ % 30 == 0) ReportLog.w(TAG, "drive records failed: " + BydEnergyReader.describe(error));
@@ -1578,7 +1578,7 @@ public final class BydBatteryPatch {
             natTimeline.setOnClickListener(v -> NatTripTimeline.show(host));
             content.addView(natTimeline);
             android.widget.Switch minimalEv = new android.widget.Switch(themed);
-            minimalEv.setText(thai ? "ปุ่ม EV แบบมินิมอล (ทดลอง)" : "Minimal EV shortcut (experimental)");
+            minimalEv.setText(thai ? "ปุ่ม NAT และ Live Energy (ทดลอง)" : "NAT controls and Live Energy (experimental)");
             minimalEv.setChecked(NatMinimalEv.enabled(host));
             minimalEv.setOnCheckedChangeListener((v,on)->NatMinimalEv.setEnabled(host,on));
             content.addView(minimalEv);
