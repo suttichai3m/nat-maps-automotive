@@ -11,8 +11,8 @@ final class NatNavigationSummary {
     private static final String DURATION = "[0-9]+\\s*(?:ชม\\.?|h|hr|hours?)(?:\\s*[0-9]+\\s*(?:นาที|min|minutes?))?|[0-9]+\\s*(?:นาที|min|minutes?)";
     private static final String LABEL = "(?:Arrival battery|Arrive with|Battery on arrival|แบตเมื่อถึง(?:ปลายทาง)?|แบตเตอรี่เมื่อถึง(?:ปลายทาง)?|ไปถึงโดยเหลือ)";
     private static final String ICON = "(?:\\uFFFC|🔋)";
-    private static final Pattern NAV = Pattern.compile("(?iu)^\\s*(?:(?:"+DURATION+")"+SEP+")?"+DIST+SEP+ETA+SEP+"(?:(?:"+LABEL+")\\s*[:：]?\\s*)?(?:"+ICON+"\\s*)?("+NatSignedSoc.TOKEN+")(?:\\s|\\uFFFC)*$");
-    private static final Pattern SOC = Pattern.compile("(?iu)^\\s*(?:(?:"+LABEL+")\\s*[:：]?\\s*)?(?:"+ICON+"\\s*)?("+NatSignedSoc.TOKEN+")(?:\\s|\\uFFFC)*$");
+    private static final Pattern NAV = Pattern.compile("(?iu)^\\s*(?:(?:"+DURATION+")"+SEP+")?"+DIST+SEP+ETA+SEP+"(?:(?:"+LABEL+")\\s*[:：]?\\s*)?(?:"+ICON+"\\s*)?("+NatSignedSoc.TOKEN+")(?:\\s|\\uFFFC|🔋)*$");
+    private static final Pattern SOC = Pattern.compile("(?iu)^\\s*(?:(?:"+LABEL+")\\s*[:：]?\\s*)?(?:"+ICON+"\\s*)?("+NatSignedSoc.TOKEN+")(?:\\s|\\uFFFC|🔋)*$");
     private static final Pattern EXPLICIT = Pattern.compile("(?iu)^\\s*"+LABEL+"\\s*[:：]?.*$");
     static boolean isExplicitSoc(CharSequence text) {
         return EXPLICIT.matcher(normalize(text)).matches() && parseSocPart(text)!=null;
@@ -23,7 +23,7 @@ final class NatNavigationSummary {
     }
     // Keep the previous preview/native-span classification unchanged unless a frame actually owns the source.
     private static final String LEGACY_SEP="\\s*[·•・]\\s*";
-    private static final Pattern LEGACY=Pattern.compile("(?iu)^\\s*"+DIST+LEGACY_SEP+"(?:[01]?[0-9]|2[0-3]):[0-5][0-9](?:\\s*(?:น\\.?|AM|PM))?"+LEGACY_SEP+"(?:\\uFFFC\\s*)?("+NatSignedSoc.TOKEN+")(?:\\s|\\uFFFC)*$");
+    private static final Pattern LEGACY=Pattern.compile("(?iu)^\\s*"+DIST+LEGACY_SEP+"(?:[01]?[0-9]|2[0-3]):[0-5][0-9](?:\\s*(?:น\\.?|AM|PM))?"+LEGACY_SEP+"(?:\\uFFFC\\s*)?("+NatSignedSoc.TOKEN+")(?:\\s|\\uFFFC|🔋)*$");
     static Integer parseLegacy(CharSequence text) {
         Matcher m=LEGACY.matcher(normalize(text));
         return m.matches()?NatSignedSoc.parse(m.group(1)):null;

@@ -520,6 +520,7 @@ public final class ColorScheme {
         if (generation != refreshGeneration) return;
         {
             try {
+                NatArrivalUi.refreshColors();
                 WeakReference<Controller> current = controller;
                 Controller maps = current != null ? current.get() : null;
                 if (maps == null || !Utils.isContextSet()) {
@@ -599,7 +600,7 @@ public final class ColorScheme {
             boolean follow = followsSystem(source);
             ReportLog.i(TAG, "System night mode " + (night ? "on" : "off")
                     + (follow ? ": Maps' colors follow it now" : " (colors from " + source + ")"));
-            if (follow) refresh("system night mode " + (night ? "on" : "off"));
+            if (follow || !on) refresh("system night mode " + (night ? "on" : "off"));
         } catch (Throwable error) {
             ReportLog.w(TAG, "System night change not handled", error);
         }
@@ -620,12 +621,18 @@ public final class ColorScheme {
      * first night update). Our dialogs use it, so they match the map behind them (BYD keeps the system in night mode).
      */
     static boolean nightColors(Context context) {
-        Boolean given = givenNight;
-        if (given != null) return given;
         try {
-            return nightFlag(context.getResources().getConfiguration().uiMode);
+            Context app = context.getApplicationContext();
+            boolean system = nightFlag((app == null ? context : app).getResources().getConfiguration().uiMode);
+            boolean enabled = SafeMode.on(context, SafeMode.COLOR_SCHEME);
+            String selected = choice == null ? stored(context) : choice;
+            int[] window = times == null ? storedTimes(context) : times;
+            Boolean lights = AUTO.equals(selected) ? lowBeamState.stable() : null;
+            Boolean held = AUTO.equals(selected) && awaitingFirstRead ? givenNight : null;
+            return decide(enabled, selected, system, lights, held,
+                    nightAt(minuteNow(), window[0], window[1]));
         } catch (RuntimeException error) {
-            return true;
+            return Boolean.TRUE.equals(givenNight);
         }
     }
 

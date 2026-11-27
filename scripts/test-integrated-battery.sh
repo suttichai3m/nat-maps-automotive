@@ -50,6 +50,9 @@ class TestIntegrated {
   check(!adj.isEmpty()&&adj.get(0).y==541,"adjacent above");cases++;
   for(NatBatteryPlacement.Box c:adj)check(viewport.contains(c)&&!c.overlaps(panel),"adjacent collision");cases++;
   check(NatBatteryPlacement.adjacent(b(0,0,90,50),b(0,0,90,50),b(1,1,10,10),160,80,4).isEmpty(),"tiny screen");cases++;
+  check(Objects.equals(16,NatNavigationSummary.parse("465 กม. · 14:21 น. · 16% 🔋")),"charging stop icon suffix");cases++;
+  check(Objects.equals(-31,NatNavigationSummary.parse("754 กม. · 18:36 น. · -31% 🔋")),"negative route icon suffix");cases++;
+  check(NatNavigationSummary.parse("465 กม. · 14:21 น. · 16% · 92%")==null,"ambiguous charging SOC rejected");cases++;
   // Long Thai trip summary: reject candidates covering the ETA/distance prefix.
   for(int scale:new int[]{1,2,3}){
    NatBatteryPlacement.Box longPanel=b(0,0,360*scale,124*scale);

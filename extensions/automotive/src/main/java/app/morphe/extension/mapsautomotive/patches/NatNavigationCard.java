@@ -173,10 +173,10 @@ final class NatNavigationCard {
         Rect r=new Rect((int)Math.floor(f.left)+x,(int)Math.floor(f.top)+y,(int)Math.ceil(f.right)+x,(int)Math.ceil(f.bottom)+y);
         return r.intersect(visible)?r:null;
     }
-    private static final Pattern TAIL=Pattern.compile("(?iu)(?:Arrival battery|Arrive with|Battery on arrival|แบตเมื่อถึง(?:ปลายทาง)?|แบตเตอรี่เมื่อถึง(?:ปลายทาง)?|ไปถึงโดยเหลือ)?\\s*[:：]?\\s*(?:\\uFFFC|🔋)?\\s*("+NatSignedSoc.TOKEN+")(?:\\s|\\uFFFC)*$");
+    private static final Pattern TAIL=Pattern.compile("(?iu)(?:Arrival battery|Arrive with|Battery on arrival|แบตเมื่อถึง(?:ปลายทาง)?|แบตเตอรี่เมื่อถึง(?:ปลายทาง)?|ไปถึงโดยเหลือ)?\\s*[:：]?\\s*(?:\\uFFFC|🔋)?\\s*("+NatSignedSoc.TOKEN+")(?:\\s|\\uFFFC|🔋)*$");
     private static Rect[] sourceRegions(Match m) {
         TextView tv=m.anchor; CharSequence t=tv.getText();
-        Matcher suffix=TAIL.matcher(t);
+        Matcher suffix=TAIL.matcher(t.toString().replace('\u00a0',' ').replace('\u202f',' ').replaceAll("[\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]", " "));
         if(!suffix.find()) return null;
         int start=suffix.start();
         while (start>0 && Character.isWhitespace(t.charAt(start-1))) start--;
@@ -265,7 +265,7 @@ final class NatNavigationCard {
         if(c.source!=null && c.source.get()!=tv) restoreNative(c);
         c.source=new java.lang.ref.WeakReference<>(tv); c.placement=placement;
         // Suppress only a verified suffix once a safe card location is available.
-        Matcher suffix=TAIL.matcher(tv.getText());
+        Matcher suffix=TAIL.matcher(tv.getText().toString().replace('\u00a0',' ').replace('\u202f',' ').replaceAll("[\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]", " "));
         if(regions!=null && !hasDrawable(tv) && suffix.find()) {
             int start=suffix.start();
             CharSequence nativeText=tv.getText();
@@ -294,16 +294,27 @@ final class NatNavigationCard {
             Rect b=getBounds(); float u=b.width()/160f;
             int fg=dark?0xfff5f5f5:0xff263238;
             int accent=soc<20?0xffdc4040:soc<35?0xffd97706:0xff179b64;
-            p.setStyle(Paint.Style.FILL); p.setColor(dark?0xff172b40:0xffe5f1f7);
-            c.drawRoundRect(new RectF(b),9*u,9*u,p);
+            p.setStyle(Paint.Style.FILL); p.setColor(dark?0xff172b30:0xfff3f8f6);
+            c.drawRoundRect(new RectF(b),12*u,12*u,p);
+            p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1.2f*u);
+            p.setColor(dark?0xff43645d:0xffc3d8d1);
+            c.drawRoundRect(new RectF(b.left+u,b.top+u,b.right-u,b.bottom-u),11*u,11*u,p);
+            p.setStyle(Paint.Style.FILL);
             p.setTextAlign(Paint.Align.LEFT); p.setTypeface(Typeface.DEFAULT); p.setTextSize(12*u); p.setColor(fg);
             c.drawText(thai?"แบตเมื่อถึง":"Arrival battery",b.left+10*u,b.top+16*u,p);
             p.setColor(soc<0?(dark?0xffff8888:0xffb91c1c):fg);
-            p.setTypeface(Typeface.DEFAULT_BOLD); p.setTextSize((soc<0?32:36)*u);
+            p.setTypeface(Typeface.DEFAULT_BOLD); p.setTextSize((soc<0?36:40)*u);
             String number=soc+"%";
-            float max=b.width()-20*u;
+            float max=b.width()-58*u;
             if(p.measureText(number)>max) p.setTextSize(p.getTextSize()*max/p.measureText(number));
             c.drawText(number,b.left+10*u,b.top+(soc<0?47:53)*u,p);
+            // Large battery pictogram to the right of the number, including negative SOC.
+            float il=b.right-43*u, it=b.top+27*u, ir=b.right-10*u, ib=b.top+47*u;
+            p.setColor(accent); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(2*u);
+            c.drawRoundRect(il,it,ir-3*u,ib,4*u,4*u,p);
+            p.setStyle(Paint.Style.FILL);
+            c.drawRoundRect(ir-2*u,it+6*u,ir,ib-6*u,u,u,p);
+            if(soc>0) c.drawRoundRect(il+3*u,it+3*u,il+3*u+(ir-il-9*u)*NatSignedSoc.bar(soc)/100f,ib-3*u,2*u,2*u,p);
             if(soc<0) {
                 p.setTypeface(Typeface.DEFAULT); p.setTextSize(12*u);
                 p.setColor(dark?0xffff8888:0xffb91c1c);

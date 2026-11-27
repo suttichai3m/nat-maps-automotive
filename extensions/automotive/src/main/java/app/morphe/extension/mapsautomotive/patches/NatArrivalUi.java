@@ -133,6 +133,15 @@ public final class NatArrivalUi {
         }, 1000);
     }
     private static final WeakHashMap<View, Boolean> ROOTS = new WeakHashMap<>();
+    static void refreshColors() {
+        MAIN.post(() -> {
+            for (View root : new java.util.ArrayList<>(ROOTS.keySet())) {
+                if (root == null || !root.hasWindowFocus() || !SafeMode.on(root.getContext(), SafeMode.BYD_BATTERY)) continue;
+                try { NatNavigationCard.refresh(root); scan(root, 0); }
+                catch (RuntimeException error) { NatNavigationCard.clear(root); }
+            }
+        });
+    }
     private static void attach(View root, Activity activity) {
         if (ROOTS.put(root, true) != null) return;
         WeakReference<View> r = new WeakReference<>(root);
@@ -182,7 +191,7 @@ public final class NatArrivalUi {
             CharSequence text = tv.getText();
             if (text == null) return;
             // Native navigation summary stays intact; the separate card owns this case.
-            if (NatNavigationCard.owns(tv) || NatNavigationCard.isNavigationSource(tv) || NatNavigationSummary.parseLegacy(text) != null) {
+            if (NatNavigationCard.owns(tv)) {
                 watch(tv);
                 // A recycled TextView may still carry the preview-only span.
                 if (text instanceof Spanned && ((Spanned) text).getSpans(0, text.length(), NatSize.class).length > 0) {
@@ -192,7 +201,8 @@ public final class NatArrivalUi {
                 }
                 return;
             }
-            boolean navigation = false;
+            boolean navigation = NatNavigationCard.isNavigationSource(tv) || NatNavigationSummary.parseLegacy(text) != null;
+            if (navigation) watch(tv);
             Matcher m = ARRIVAL.matcher(text);
             if (!m.matches()) {
                 m = PERCENT.matcher(text);
