@@ -1,4 +1,51 @@
-# Google Maps Automotive for MicroG-RE on BYD cars
+# NAT Maps Automotive — V3.2 Development Candidate
+
+**Active development branch:** `map-original`  
+**Target vehicle:** BYD Seal / DiLink 3  
+**Status:** Source candidate — not a certified final APK  
+**Updated:** 2026-11-27
+
+## สถานะการพัฒนา / Development status
+
+เป้าหมายคือ Google Maps แบบ Native พร้อม EV Dashboard โดยรักษาการนำทางเดิมและ Battery Arrival ขนาดใหญ่ทั้งก่อนและหลัง Start
+
+| Feature | Target | Current status |
+| --- | --- | --- |
+| Native Split Screen | Google Maps 75% / EV Dashboard 25% | Implemented in source; real head-unit layout and touch bounds unverified. Safe fallback to Full Map. |
+| Arrival battery | Large signed SOC before and after Start, without duplicate icon | Existing integrated card retained; side-panel fallback added. Visual parity and duplicate suppression require vehicle testing. |
+| Current battery | Actual BYD SOC | Existing source retained; confirm against instrument cluster. |
+| EV Charging | Show/hide charging pins directly without generic Search or ending the route | Generic Search fallback removed. Direct marker integration still pending. |
+| Live Power | Read-only actual dashboard kW, including parked and moving | Validated dashboard signal pending; show unavailable rather than substitute estimated kW. |
+| Energy Prediction | Distinguish average battery power (kW), energy (kWh), consumption (kWh/100 km) | Estimated power relabelled; stale estimate expires after five seconds. |
+| Day/Night | Native map and NAT UI switch together without losing guidance | Native consumer hook and refresh added; runtime validation pending. |
+| Live Motion / Turning | Vehicle motion and turn indication using fresh GPS/vehicle data | Source integrated; actual head-unit behavior unverified. |
+| GPS and route continuity | Preserve existing navigation | No intentional replacement of existing route logic; regression verification pending. |
+
+## Build and acceptance
+
+- Use only the `map-original` branch for this candidate.
+- Review [runtime fix notes](NAT-MAP-ORIGINAL-RUNTIME-FIX.md) and [cloud APK instructions](docs/nat-cloud-apk.md).
+- Use the supported original Maps APK, not a previously patched APK.
+- Open [GitHub Actions](https://github.com/suttichai3m/nat-maps-automotive/actions) and select **NAT Cloud APK Builder** on branch **map-original** for a candidate build, if the required private build configuration is available.
+- Source commits: [runtime fixes](https://github.com/suttichai3m/nat-maps-automotive/commit/0e345bd38e7e2a1247df4f2db5d3655628a839ef), [split integration](https://github.com/suttichai3m/nat-maps-automotive/commit/71d1412d14c1dbb1c4e440af277253501bde9628), [energy display follow-up](https://github.com/suttichai3m/nat-maps-automotive/commit/346ca7f3a3eeacc92058fef3ee164b1c3d01eb10).
+
+### Release gate — not yet verified
+
+- [ ] Full Gradle / Morphe build and APK signing
+- [ ] 75:25 viewport, touch controls, Full Map recovery
+- [ ] Battery Arrival before and after Start; positive/negative values
+- [ ] EV charging pins show/hide directly; active route retained
+- [ ] Actual BYD dashboard kW matches when parked and moving
+- [ ] Day/Night changes entire map and UI; route retained
+- [ ] Live turning, GPS, navigation and stability on BYD Seal
+
+Regression cases are present in `scripts/test-integrated-battery.sh`; their execution against the current branch is not independently verified here. No new APK or on-car acceptance result is claimed. Keep a working APK backup. Test controls while parked.
+
+---
+
+## Upstream project documentation
+
+### Google Maps Automotive for MicroG-RE on BYD cars
 
 Google Maps Automotive on a BYD DiLink 3 head unit (Android 10) with [MicroG-RE 7.3.0](https://github.com/MorpheApp/MicroG-RE/releases/tag/7.3.0). The patched app, **Maps**, installs alongside phone Google Maps. This repository publishes `.mpp` bundles only; bring your own original APK.
 
