@@ -166,7 +166,7 @@ public class TestNatLiveEnergy {
   check(near(e.read(10000,true).soc,82));check(Double.isNaN(e.read(10000,true).power));
   e.accept(20000,81,64900,1001,50,true);
   NatLiveEnergy.Reading r=e.read(20000,true);
-  check(near(r.power,36));check(near(r.net,.1));check(Double.isNaN(r.rate));check(near(r.km,.1));check(near(r.increase,0));check(r.pairs==1);
+  check(near(r.power,36));check(near(e.read(25000,true).power,36));check(Double.isNaN(e.read(25001,true).power));check(near(e.read(25001,true).net,.1));check(near(r.net,.1));check(Double.isNaN(r.rate));check(near(r.km,.1));check(near(r.increase,0));check(r.pairs==1);
   e.accept(30000,81,64950,1002,50,true);r=e.read(30000,true);
   check(near(r.power,-18));check(near(r.net,.05));check(near(r.increase,.05));check(Double.isNaN(r.rate));
   e.accept(40000,82,66000,1002,0,true);r=e.read(40000,true);
@@ -292,3 +292,18 @@ public class TestNatToolbar {
 JAVA
 javac --release 17 -encoding UTF-8 -d "$D" "$P/NatToolbarLayout.java" "$D/TestNatToolbar.java"
 java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatToolbar
+
+cat > "$D/TestNatSplitMapOriginal.java" <<'JAVA'
+package app.morphe.extension.mapsautomotive.patches;
+public class TestNatSplitMapOriginal {
+ static int n;static void check(boolean b){if(!b)throw new AssertionError("split case "+n);n++;}
+ public static void main(String[] args){
+  check(NatSplitMath.side(1920,1080,540,200)==480);check(NatSplitMath.side(1280,720,540,200)==320);check(NatSplitMath.side(800,480,540,200)==200);check(NatSplitMath.side(799,480,540,200)==0);check(NatSplitMath.side(720,1280,540,200)==0);
+  check(NatSplitMath.viewportHeight(720,56,260)==664);check(NatSplitMath.viewportHeight(300,56,260)==0);check(NatSplitMath.geometry(960,664,960,664,2));check(!NatSplitMath.geometry(1280,664,960,664,2));check(NatSplitMath.ownsGeometry(960,664,3,960,664,3));check(!NatSplitMath.ownsGeometry(1280,664,3,960,664,3));
+  check(NatSplitMath.percent(NatSplitMath.arrival(false,92,-5)).equals("-5%"));check(NatSplitMath.percent(NatSplitMath.arrival(true,92,-5)).equals("92%"));check(NatSplitMath.percent(NatSplitMath.arrival(false,92,null)).equals("—"));check(NatSplitMath.keepViewport(false,5000,0));check(!NatSplitMath.keepViewport(false,5001,0));check(NatSplitMath.turn(350,10,50,1000)==20);check(NatSplitMath.turn(10,350,50,1000)==-20);check(Double.isNaN(NatSplitMath.turn(10,350,0,1000)));
+  System.out.println("PASS: "+n+" map-original split geometry/motion checks");
+ }
+}
+JAVA
+javac --release 17 -encoding UTF-8 -d "$D" "$P/NatSplitMath.java" "$D/TestNatSplitMapOriginal.java"
+java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatSplitMapOriginal

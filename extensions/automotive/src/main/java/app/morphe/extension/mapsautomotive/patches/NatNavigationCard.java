@@ -161,6 +161,18 @@ final class NatNavigationCard {
     private static final WeakHashMap<View,Long> VERIFIED=new WeakHashMap<>();
     private static final WeakHashMap<View,double[]> ROUTES=new WeakHashMap<>();
     static boolean recentlyVerified(View root){Long t=VERIFIED.get(root);long now=android.os.SystemClock.elapsedRealtime();return root.hasWindowFocus()&&t!=null&&now>=t&&now-t<=2000;}
+    static boolean hasVisibleCard(View root){Card c=CARDS.get(root);return c!=null&&!c.getBounds().isEmpty()&&c.hidden!=null;}
+    static Integer verifiedSoc(View root){double[] m=ROUTES.get(root);return m!=null&&recentlyVerified(root)?(int)m[0]:null;}
+    static double verifiedKm(View root){double[] m=ROUTES.get(root);return m!=null&&recentlyVerified(root)?m[1]:Double.NaN;}
+    static String verifiedEta(View root){
+        if(!recentlyVerified(root))return null;
+        List<Match> list=matches(root);if(list.size()!=1||list.get(0).panel==null)return null;
+        List<TextView> all=new ArrayList<>();collect(list.get(0).panel,all,0);
+        java.util.regex.Pattern p=java.util.regex.Pattern.compile("(?<![0-9])(?:[01]?[0-9]|2[0-3]):[0-5][0-9](?:\\s*(?:AM|PM|น\\.?))?",java.util.regex.Pattern.CASE_INSENSITIVE);
+        String found=null;
+        for(TextView v:all){java.util.regex.Matcher q=p.matcher(NatNavigationSummary.normalize(v.getText()));while(q.find()){String x=q.group();if(found!=null&&!found.equals(x))return null;found=x;}}
+        return found;
+    }
     static boolean matchesForecast(View root,NatPrediction.Snapshot f){
         double[] m=ROUTES.get(root);if(f==null||m==null||!recentlyVerified(root))return false;
         return NatStabilityMath.matches((int)m[0],m[1],f.google,f.km)||(f.charges>0&&NatStabilityMath.matches((int)m[0],m[1],f.next,f.nextKm));
@@ -295,6 +307,8 @@ final class NatNavigationCard {
         Match match=matches.get(0); TextView tv=match.anchor; int soc=match.soc;
         Rect visible=new Rect(), viewport=new Rect(); Point offset=new Point();
         if(!tv.getGlobalVisibleRect(visible) || !root.getGlobalVisibleRect(viewport,offset)) { clear(root); status(root,"not visible"); return; }
+        Rect mapBounds=NatSplitScreen.mapBounds(root);
+        if(mapBounds!=null&&!viewport.intersect(mapBounds)){clear(root);return;}
         Rect[] regions=sourceRegions(match);
         Rect anchor=regions==null?visible:regions[0];
         Rect panelRect=new Rect();

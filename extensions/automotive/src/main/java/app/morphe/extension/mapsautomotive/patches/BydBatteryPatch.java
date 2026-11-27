@@ -700,6 +700,7 @@ public final class BydBatteryPatch {
             record.soc = sample.soc;
             record.mileage01km = sample.mileage;
             record.speedKmh = sample.speedKmh;
+            NatSplitScreen.observe(record.elapsed,record.speedKmh);
             if (outsideC != BydOutsideTemperature.UNAVAILABLE) record.outsideC = outsideC;
             BydBatteryHealth.Raw temperatures = sampleTemperatures;
             if (temperatures != null && temperatures.average != BydBatteryHealth.UNAVAILABLE) record.batteryTempRaw = temperatures.average;

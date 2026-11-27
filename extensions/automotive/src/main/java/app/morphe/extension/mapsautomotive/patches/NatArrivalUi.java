@@ -116,20 +116,23 @@ public final class NatArrivalUi {
             boolean focused;
             @Override public void run() {
                 Activity a = ref.get();
-                if (a == null || a.isDestroyed() || a.isFinishing()) return;
+                if (a == null) return;
+                if(a.isDestroyed()||a.isFinishing()){NatSplitScreen.clear(a);return;}
                 try {
                     View root = a.getWindow().peekDecorView();
                     if (root != null && a.hasWindowFocus() && SafeMode.on(a, SafeMode.BYD_BATTERY)) {
                         if(!focused){focused=true;ColorScheme.refreshOnFocus();}
                         attach(root, a);
+                        NatSplitScreen.refresh(a,root);
                         NatNavigationCard.refresh(root);
                         scan(root, 0);
                         try { NatMinimalEv.refresh(a,root); } catch (RuntimeException error) { NatMinimalEv.clear(a); ReportLog.w("NatMinimalEv","Overlay refresh failed",error); }
-                    } else { focused=false; if(root!=null){NatNavigationCard.clear(root);NatMinimalEv.clear(a);} }
+                    } else { focused=false; NatSplitScreen.suspend(a); if(!SafeMode.on(a,SafeMode.BYD_BATTERY))NatSplitScreen.clear(a); if(root!=null){NatNavigationCard.clear(root);NatMinimalEv.clear(a);} }
                 } catch (RuntimeException error) {
                     View root = a.getWindow().peekDecorView();
                     if (root != null) NatNavigationCard.clear(root);
                     NatMinimalEv.clear(a);
+                    NatSplitScreen.clear(a);
                     ReportLog.w("NatArrivalUi", "Scan failed", error);
                 }
                 MAIN.postDelayed(this, 1000);
