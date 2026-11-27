@@ -174,6 +174,8 @@ final class NatMinimalEv {
                 case "⊘":canvas.drawCircle(0,0,11,pen);canvas.drawLine(-8,8,8,-8,pen);break;
                 case "ⓘ":canvas.drawCircle(0,0,12,pen);canvas.drawCircle(0,-6,1,pen);canvas.drawLine(0,-1,0,7,pen);break;
                 case "▥":canvas.drawRoundRect(-13,-10,13,10,2,2,pen);canvas.drawLine(6.5f,-10,6.5f,10,pen);break;
+                case "◇":canvas.drawRoundRect(-12,-6,12,7,3,3,pen);canvas.drawLine(-8,-6,-5,-11,pen);canvas.drawLine(-5,-11,5,-11,pen);canvas.drawLine(5,-11,8,-6,pen);canvas.drawCircle(-7,8,2,pen);canvas.drawCircle(7,8,2,pen);break;
+                case "❄":for(int k2=0;k2<6;k2++){canvas.drawLine(0,0,0,-12,pen);canvas.drawLine(0,-7,-3,-10,pen);canvas.drawLine(0,-7,3,-10,pen);canvas.rotate(60);}break;
                 default:break;
             }
             canvas.restore();
@@ -197,6 +199,7 @@ final class NatMinimalEv {
         t.setOnLongClickListener(v->{NatSplitScreen.toggle(a);return true;});
         return t;
     }
+    private static TextView snowButton(Activity a){return toolbarButton(a,"❄","Snow AI",()->NatV36Shortcuts.snow(a));}
     private static TextView splitButton(Activity a){
         return toolbarButton(a,"▥","Split Screen 75:25",()->{
             View root=a.getWindow().peekDecorView();
@@ -393,7 +396,7 @@ final class NatMinimalEv {
         NatToolbarLayout.Slot reserved=route&&!nativeCurrent(views)?NatToolbarLayout.currentBattery(bounds.left,bounds.top,bounds.right,bounds.bottom,dp(a,142),dp(a,58),edge,
                 q->free(views,new Rect(q.x,q.y,q.x+q.w,q.y+q.h),host)):null;
         final Rect batterySlot=reserved==null?null:new Rect(reserved.x,reserved.y,reserved.x+reserved.w,reserved.y+reserved.h);
-        NatToolbarLayout.Slot chosen=NatToolbarLayout.chooseWithSplit(c.mapControls,routeControls,
+        NatToolbarLayout.Slot chosen=NatToolbarLayout.chooseV36(c.mapControls,routeControls,
                 bounds.left,bounds.top,bounds.right,bounds.bottom,size,gap,edge,true,
                 q->{Rect r=new Rect(q.x,q.y,q.x+q.w,q.y+q.h);return (batterySlot==null||!Rect.intersects(batterySlot,r))&&free(views,r,host);});
         if(chosen==null){clear(a);report(state,"Toolbar unavailable: native controls protected");return;}
@@ -406,19 +409,21 @@ final class NatMinimalEv {
             remove(bar);bar=column(a);bar.setOrientation(vertical?1:0);bar.setElevation(dp(a,5));
             TextView[] keys;
             if(chosen.count==1)keys=new TextView[]{diagnosticsButton(a,owner)};
+            else if(chosen.count==3)keys=new TextView[]{diagnosticsButton(a,owner),splitButton(a),snowButton(a)};
             else if(chosen.count==NatToolbarLayout.IDLE_SPLIT_COUNT)keys=new TextView[]{diagnosticsButton(a,owner),splitButton(a)};
             else {
-                TextView[] original={toolbarButton(a,"⚡","EV Charging",()->act(a,owner,false)),toolbarButton(a,"↗","Energy Prediction",()->switchPanel(a,owner,1)),toolbarButton(a,"☷","Charging Plan",()->switchPanel(a,owner,2)),toolbarButton(a,"⊘","Clean Mode",()->{act(a,owner,true);refresh(a,a.getWindow().peekDecorView());})};
+                TextView[] original={toolbarButton(a,"⚡","EV Charging",()->act(a,owner,false)),toolbarButton(a,"◇","Vehicle Control",()->NatV36Shortcuts.control(a)),toolbarButton(a,"☷","Charging Plan",()->switchPanel(a,owner,2)),toolbarButton(a,"⊘","Clean Mode",()->{act(a,owner,true);refresh(a,a.getWindow().peekDecorView());})};
                 keys=java.util.Arrays.copyOf(original,chosen.count);
                 if(NatToolbarLayout.hasDiagnostics(chosen.count))keys[NatToolbarLayout.diagnosticIndex(chosen.count)]=diagnosticsButton(a,owner);
                 if(NatToolbarLayout.splitIndex(chosen.count)>=0)keys[NatToolbarLayout.splitIndex(chosen.count)]=splitButton(a);
+                if(chosen.count==7){keys[4]=diagnosticsButton(a,owner);keys[5]=splitButton(a);keys[6]=snowButton(a);}
             }
             for(int i=0;i<keys.length;i++){android.widget.LinearLayout.LayoutParams lp=new android.widget.LinearLayout.LayoutParams(size,size);if(i>0){if(vertical)lp.topMargin=gap;else lp.leftMargin=gap;}bar.addView(keys[i],lp);}
             put(host,bar,slot,true);state.toolbar=new WeakReference<>(bar);state.vertical=vertical;
         }else if(state.left!=slot.left||state.top!=slot.top)put(host,bar,slot,false);
         state.left=slot.left;state.top=slot.top;
         boolean[] activeKeys=new boolean[chosen.count];
-        if(chosen.count>=NatToolbarLayout.LEGACY_COUNT){activeKeys[0]=active;activeKeys[1]=state.mode==1;activeKeys[2]=state.mode==2;}
+        if(chosen.count>=NatToolbarLayout.LEGACY_COUNT){activeKeys[0]=active;activeKeys[1]=false;activeKeys[2]=state.mode==2;}
         for(int i=0;i<chosen.count;i++){TextView t=(TextView)bar.getChildAt(i);if(t.getCurrentTextColor()!=(activeKeys[i]||dark?Color.WHITE:0xff263238)||t.isSelected()!=activeKeys[i]||t.getBackground()==null){style(t,activeKeys[i],dark,size/2);t.setSelected(activeKeys[i]);}}
         if(!routeControls)return;
         NatPrediction.Snapshot matched=NatNavigationCard.matchesForecast(root,forecast)?forecast:null;

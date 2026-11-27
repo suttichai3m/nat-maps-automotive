@@ -1,0 +1,8 @@
+# V3.6 — staged candidate (map-original)
+- Native 75:25, arrival SOC, static Seal image, day/night and Send to Car V3.5 fixes retained. No Grab mode.
+- Snow AI shortcut resolves exported launcher activities with exact Snow AI/Snow Assistant labels; no guessed package. Full-map toolbar uses extra slot only if it fits; split footer has Snow AI and Smart EV. On newer Android package visibility may hide it.
+- Control replaces Energy; opens a capability notice and optional native BYD system launcher or Snow AI. No direct actuator writes until exact SDK, real permission, park/gear and acknowledgement verified. No fake controls or permission bypass.
+- TPMS diagnostic reads documented wheel pressure/signal and optional system state, records raw values and init errors, retains normal-signal and kPa display guard. No unverified fallback scaling. BYD API V1.0.5 sections 6.15.5–7 says stationary system may be masked: https://oip.byd.com/uploads/20210824/46cd2d7c2e878b0a1c6b066967e7f6fd.pdf
+- Daily observed moving/stopped intervals, no gaps filled. Manual charge start/end records net BMS increase and estimated tariff cost (up to 30 entries), not station billing or confirmed charge detection. Do not drive during manual charge session. No auto-detection, instantaneous charging power/ETA, live POWER/REGEN or 12V until signals validated.
+- User-set service odometer reminder and persistent dashboard row visibility. Core SOC cards stay visible. No row reordering yet. Energy Intelligence retained in Smart EV.
+- New CI tests cover timing, charge delta and collision-safe toolbar fallback. Full Android build, patch application and parked vehicle tests required. Not release certified.

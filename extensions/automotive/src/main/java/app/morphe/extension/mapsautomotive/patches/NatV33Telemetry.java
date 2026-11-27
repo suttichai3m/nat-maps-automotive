@@ -44,6 +44,7 @@ final class NatV33Telemetry {
  static void tariff(Context c,double v){if(NatDailyMath.validRate(v))prefs(c).edit().putFloat("tariff",(float)v).apply();}
  // Worker thread only. Distance spans same-day restarts; unobserved energy is never fabricated.
  static void sample(Context c,BydEnergyReader.Sample s){
+  try{NatV36Daily.observe(c,s);}catch(RuntimeException ignored){}
   String d=day(s.wall);SharedPreferences pref=prefs(c);
   if(!d.equals(day)){
    day=d;boolean same=d.equals(pref.getString("day",""));

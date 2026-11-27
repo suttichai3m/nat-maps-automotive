@@ -83,12 +83,17 @@ final class NatSmartEvMenu {
   },100);
  }
  private void home(){
-  heading("Smart EV  •  NAT V3.5");
+  heading("Smart EV  •  NAT V3.6");
   line("เลือกฟังก์ชัน • รายละเอียดควรเปิดดูเมื่อจอดรถ");
   action("⚡  Smart Charging Assistant",this::charging);
   action("◷  Daily Driving Timeline",()->closeThen(()->NatTripTimeline.show(a)));
   action("▥  Energy Intelligence",this::energy);
   action("＋  Vehicle Health Monitor",this::health);
+  action("❄  Snow AI",()->closeThen(()->NatV36Shortcuts.snow(a)));
+  action("Vehicle Control",()->closeThen(()->NatV36Shortcuts.control(a)));
+  action("Charging Monitor / History",this::chargingHistory);
+  action("Service Reminder",this::service);
+  action("Custom Dashboard",()->closeThen(()->NatSplitScreen.customize(a)));
   action("Send to Car • สถานะการรับเส้นทาง",()->closeThen(()->SendToCarStatus.show(a,a.getWindow().peekDecorView())));
   action("ปิด / Close",()->dialog.dismiss());
  }
@@ -135,6 +140,9 @@ final class NatSmartEvMenu {
   NatV33Telemetry.Today t=NatV33Telemetry.today();boolean detail=t!=null&&t.detailPairs>0;
   double price=NatV33Telemetry.tariff(a),net=t==null?Double.NaN:t.kwh;
   double covered=detail?t.observedKm:Double.NaN,observed=detail?Math.max(0,t.observedNet):Double.NaN;
+  NatV36Daily.Summary day=NatV36Daily.read(a);
+  metric("เวลาขับที่บันทึก",day==null?"—":NatV36Daily.duration(day.moving));
+  metric("เวลาหยุดที่บันทึก",day==null?"—":NatV36Daily.duration(day.stopped));
   metric("ระยะทางวันนี้",num(t==null?Double.NaN:t.km,"km"));metric("พลังงานสุทธิที่บันทึก",num(net,"kWh"));
   metric("ค่าไฟ / kWh",money(price));metric("ค่าไฟวันนี้ (ประมาณ)",money(NatDailyMath.cost(net,price)));
   metric("ระยะทางที่มีคู่ข้อมูล V3.4",num(covered,"km"));metric("พลังงานลดลงขณะขับ",num(detail?t.positive:Double.NaN,"kWh"));
@@ -143,6 +151,30 @@ final class NatSmartEvMenu {
   metric("ต้นทุนช่วงที่บันทึก",money(NatDailyMath.perKm(NatDailyMath.cost(observed,price),covered))+" / กม.");
   line("ข้อมูลบางช่วงเท่านั้น • พลังงานแบตเพิ่มไม่ใช่ค่า REGEN ที่ยืนยัน • รายละเอียดเริ่มสะสมตั้งแต่ V3.4");
   action("รีเฟรชสรุป",this::energy);action("ดูประวัติ / Export",()->closeThen(()->NatTripTimeline.show(a)));action("‹ กลับเมนู",this::home);
+ }
+ private void chargingHistory(){
+  heading("Charging Monitor / History");
+  NatV36Daily.Energy e=NatV36Daily.energy();
+  metric("SOC / พลังงานคงเหลือ",e==null?"—":num(e.soc,"%")+" / "+num(e.kwh,"kWh"));
+  metric("กำลังชาร์จจริง / เวลาที่เหลือ","ยังไม่ยืนยัน SDK");
+  line("บันทึกช่วงชาร์จด้วยตนเองเมื่อจอดรถ • ค่าพลังงานเพิ่มสุทธิจาก BMS ไม่ใช่ไฟที่สถานีคิดเงิน");
+  line(NatV36Daily.chargeStatus(a));
+  action("เริ่มบันทึกช่วงชาร์จ",()->{line(NatV36Daily.beginCharge(a));});
+  action("จบบันทึกช่วงชาร์จ",()->{line(NatV36Daily.endCharge(a));});
+  line(NatV36Daily.history(a));
+  action("รีเฟรช",this::chargingHistory);action("‹ กลับเมนู",this::home);
+ }
+ private void service(){
+  heading("Service Reminder");
+  NatV33Telemetry.Slow s=NatV33Telemetry.slow();
+  metric("ODO ล่าสุด",num(s==null?Double.NaN:s.odo,"km"));
+  double target=prefs.getFloat("service_odo",0f);
+  metric("ระยะที่ตั้งไว้",target>0?num(target,"km"):"—");
+  metric("เหลือถึงนัด",target>0&&s!=null&&Double.isFinite(s.odo)?num(target-s.odo,"km"):"—");
+  LinearLayout controls=new LinearLayout(a);body.addView(controls);
+  EditText input=numberField(controls,"กำหนด ODO นัดถัดไป",target);
+  action("บันทึกระยะเข้าศูนย์",()->{try{double v=Double.parseDouble(input.getText().toString());if(!Double.isFinite(v)||v<=0||v>2000000)throw new IllegalArgumentException();prefs.edit().putFloat("service_odo",(float)v).apply();service();}catch(RuntimeException ex){input.setError("กรอกเลขไมล์ที่ถูกต้อง");}});
+  line("ระยะที่ผู้ใช้กำหนดเอง • ไม่ใช่กำหนดการจาก BYD");action("‹ กลับเมนู",this::home);
  }
  private String jsonValue(JSONObject j,String key,String suffix){return j==null||j.isNull(key)?"—":j.optString(key,"—")+suffix;}
  private void health(){
@@ -158,7 +190,9 @@ final class NatSmartEvMenu {
   metric("อายุข้อมูลอุณหภูมิ",ta<0?"—":ta+" s");
   NatVehicleExtras.Values e=NatVehicleExtras.read();
   metric("ยางหน้า L / R (PSI)",e==null?"—":e.front);metric("ยางหลัง L / R (PSI)",e==null?"—":e.rear);
+  line(NatVehicleExtras.tyreDiagnostics());
   metric("12V","ยังไม่รองรับ");
+  action("TPMS Diagnostics",()->new AlertDialog.Builder(a).setTitle("TPMS • SDK status").setMessage(NatVehicleExtras.tyreDiagnostics()).setPositiveButton("ปิด",null).show());
   line("อ่านจากข้อมูลสุขภาพแบตเดิมของ BYD • ไม่ใช่การวินิจฉัยความปลอดภัยของรถ • ไม่แสดงค่าที่หมดอายุ");
   action("รีเฟรชข้อมูล",this::health);action("System Diagnostics",()->closeThen(()->NatMinimalEv.splitAction(a,4)));action("‹ กลับเมนู",this::home);
  }

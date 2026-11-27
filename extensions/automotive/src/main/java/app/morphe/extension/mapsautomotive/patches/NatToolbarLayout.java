@@ -22,6 +22,9 @@ final class NatToolbarLayout {
     static Slot chooseWithSplit(boolean mapControls,boolean routeControls,int left,int top,int right,int bottom,int size,int gap,int edge,boolean leftFirst,Predicate<Slot> free){
         return chooseCounts(mapControls,left,top,right,bottom,size,gap,edge,leftFirst,free,routeControls?new int[]{SPLIT_COUNT,FULL_COUNT,LEGACY_COUNT}:new int[]{IDLE_SPLIT_COUNT,1});
     }
+    static Slot chooseV36(boolean mapControls,boolean routeControls,int left,int top,int right,int bottom,int size,int gap,int edge,boolean leftFirst,Predicate<Slot> free){
+        return chooseCounts(mapControls,left,top,right,bottom,size,gap,edge,leftFirst,free,routeControls?new int[]{7,6,5,4}:new int[]{3,2,1});
+    }
     private static Slot chooseCounts(boolean mapControls,int left,int top,int right,int bottom,int size,int gap,int edge,boolean leftFirst,Predicate<Slot> free,int[] counts){
         if(!mapControls||right<=left||bottom<=top||size<=0||gap<0||edge<0||free==null)return null;
         for(int count:counts){

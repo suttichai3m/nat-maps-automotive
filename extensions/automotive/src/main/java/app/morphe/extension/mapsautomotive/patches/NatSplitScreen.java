@@ -49,7 +49,7 @@ final class NatSplitScreen {
  private static int dp(Context c,int n){return Math.round(n*c.getResources().getDisplayMetrics().density);}
  private static final class State {
   FrameLayout host;View nativeView;FrameLayout.LayoutParams original,applied;
-  LinearLayout panel,footer;TextView soc,arrival,arrivalLabel,speed,power,remaining,rate,distance,eta,gps,byd,heading;
+  LinearLayout panel,footer,detailsBody;TextView soc,arrival,arrivalLabel,speed,power,remaining,rate,distance,eta,gps,byd,heading;
   ImageView hero;TextView range,odo,acDriver,acPassenger,todayKm,todayEnergy,tariff,todayCost,dayNote,outside,battTemp,soh,tyresFront,tyresRear;LocationManager lm;LocationListener listener;
   WeakReference<View> blocked;int blockedW,blockedH;
   long bearingAt=-1,fixAt=-1,started,lastEvidence=-1,retryAt;
@@ -80,7 +80,7 @@ final class NatSplitScreen {
  }
  private static void removeUi(State s){
   NatV33Telemetry.stop();
-  remove(s.panel);remove(s.footer);s.panel=s.footer=null;s.hero=null;
+  remove(s.panel);remove(s.footer);s.panel=s.footer=s.detailsBody=null;s.hero=null;
   s.range=s.odo=s.acDriver=s.acPassenger=s.todayKm=s.todayEnergy=s.tariff=s.todayCost=s.dayNote=s.outside=s.battTemp=s.soh=s.tyresFront=s.tyresRear=null;
   s.soc=s.arrival=s.arrivalLabel=s.speed=s.power=s.remaining=s.rate=s.distance=s.eta=s.gps=s.byd=s.heading=null;
  }
@@ -201,7 +201,7 @@ final class NatSplitScreen {
  private static void build(Activity a,State s,int width,int mapH,int footerH){
   s.dark=ColorScheme.nightColors(a);
   LinearLayout panel=vertical(a);panel.setTag(OWN);panel.setBackgroundColor(surface(s));panel.setPadding(dp(a,6),dp(a,5),dp(a,6),dp(a,4));s.panel=panel;
-  add(panel,text(a,"BYD SEAL  •  NAT V3.5",14,fg(s),true),dp(a,24));
+  add(panel,text(a,"BYD SEAL  •  NAT V3.6",14,fg(s),true),dp(a,24));
   s.hero=new ImageView(a);s.hero.setScaleType(ImageView.ScaleType.FIT_CENTER);
   s.hero.setContentDescription("BYD Seal blue, static studio image");s.hero.setImageBitmap(NatSealHero.bitmap());
   s.hero.setBackground(bg(a,0xff071522,0,8));s.hero.setClipToOutline(true);
@@ -217,32 +217,48 @@ final class NatSplitScreen {
   s.arrival=metric(a,s,batteries,"แบตเมื่อถึงปลายทาง",blue(s),true,true);
   // Battery cards remain outside the scrollable details, even on smaller displays.
   ScrollView details=new ScrollView(a);details.setFillViewport(true);panel.addView(details,new LinearLayout.LayoutParams(-1,0,1));
-  LinearLayout body=vertical(a);details.addView(body,new ScrollView.LayoutParams(-1,-2));
+  LinearLayout body=vertical(a);s.detailsBody=body;details.addView(body,new ScrollView.LayoutParams(-1,-2));
   int metricsH=dp(a,46);
-  LinearLayout m0=row(a);add(body,m0,metricsH);s.range=metric(a,s,m0,"ระยะที่ขับได้ (ประมาณ)",green(s),false,false);s.odo=metric(a,s,m0,"เลขไมล์สะสม ODO",fg(s),false,false);
-  LinearLayout m1=row(a);add(body,m1,metricsH);s.speed=metric(a,s,m1,"ความเร็ว",fg(s),false,false);s.power=metric(a,s,m1,"POWER / REGEN (เฉลี่ย)",fg(s),false,false);
-  LinearLayout m2=row(a);add(body,m2,metricsH);s.remaining=metric(a,s,m2,"พลังงานที่ต้องใช้อีก",fg(s),false,false);s.rate=metric(a,s,m2,"อัตราสิ้นเปลืองคาดการณ์",fg(s),false,false);
-  LinearLayout m3=row(a);add(body,m3,metricsH);s.distance=metric(a,s,m3,"ระยะทาง (Maps)",fg(s),false,false);s.eta=metric(a,s,m3,"ถึงเวลา (Maps)",fg(s),false,false);
-  LinearLayout ac=row(a);add(body,ac,metricsH);s.acDriver=metric(a,s,ac,"แอร์คนขับ",blue(s),false,false);s.acPassenger=metric(a,s,ac,"แอร์ผู้โดยสาร",blue(s),false,false);
+  LinearLayout m0=row(a);m0.setTag("nat_custom_range");add(body,m0,metricsH);s.range=metric(a,s,m0,"ระยะที่ขับได้ (ประมาณ)",green(s),false,false);s.odo=metric(a,s,m0,"เลขไมล์สะสม ODO",fg(s),false,false);
+  LinearLayout m1=row(a);m1.setTag("nat_custom_power");add(body,m1,metricsH);s.speed=metric(a,s,m1,"ความเร็ว",fg(s),false,false);s.power=metric(a,s,m1,"POWER / REGEN (เฉลี่ย)",fg(s),false,false);
+  LinearLayout m2=row(a);m2.setTag("nat_custom_forecast");add(body,m2,metricsH);s.remaining=metric(a,s,m2,"พลังงานที่ต้องใช้อีก",fg(s),false,false);s.rate=metric(a,s,m2,"อัตราสิ้นเปลืองคาดการณ์",fg(s),false,false);
+  LinearLayout m3=row(a);m3.setTag("nat_custom_route");add(body,m3,metricsH);s.distance=metric(a,s,m3,"ระยะทาง (Maps)",fg(s),false,false);s.eta=metric(a,s,m3,"ถึงเวลา (Maps)",fg(s),false,false);
+  LinearLayout ac=row(a);ac.setTag("nat_custom_climate");add(body,ac,metricsH);s.acDriver=metric(a,s,ac,"แอร์คนขับ",blue(s),false,false);s.acPassenger=metric(a,s,ac,"แอร์ผู้โดยสาร",blue(s),false,false);
   add(body,text(a,"TODAY  •  สรุปการขับวันนี้",12,fg(s),true),dp(a,22));
-  LinearLayout daily=row(a);add(body,daily,metricsH);s.todayKm=metric(a,s,daily,"ระยะทางวันนี้",fg(s),false,false);s.todayEnergy=metric(a,s,daily,"พลังงานสุทธิที่บันทึก",fg(s),false,false);
-  LinearLayout costs=row(a);add(body,costs,metricsH);s.tariff=metric(a,s,costs,"ค่าไฟ / kWh  ⚙",blue(s),false,false);s.todayCost=metric(a,s,costs,"ค่าไฟวันนี้ (ประมาณ)",green(s),false,false);
+  LinearLayout daily=row(a);daily.setTag("nat_custom_daily");add(body,daily,metricsH);s.todayKm=metric(a,s,daily,"ระยะทางวันนี้",fg(s),false,false);s.todayEnergy=metric(a,s,daily,"พลังงานสุทธิที่บันทึก",fg(s),false,false);
+  LinearLayout costs=row(a);costs.setTag("nat_custom_cost");add(body,costs,metricsH);s.tariff=metric(a,s,costs,"ค่าไฟ / kWh  ⚙",blue(s),false,false);s.todayCost=metric(a,s,costs,"ค่าไฟวันนี้ (ประมาณ)",green(s),false,false);
   View tariffCell=(View)s.tariff.getParent();tariffCell.setClickable(true);tariffCell.setFocusable(true);tariffCell.setContentDescription("ตั้งราคาค่าไฟต่อ kWh");tariffCell.setOnClickListener(v->editTariff(a,s));
   s.dayNote=text(a,"ข้อมูลตามช่วงที่แอปบันทึก",10,muted(s),false);add(body,s.dayNote,dp(a,20));
-  LinearLayout v1=row(a);add(body,v1,metricsH);s.outside=metric(a,s,v1,"อุณหภูมิภายนอก",fg(s),false,false);s.battTemp=metric(a,s,v1,"อุณหภูมิแบตเฉลี่ย",fg(s),false,false);
-  LinearLayout v2=row(a);add(body,v2,metricsH);s.tyresFront=metric(a,s,v2,"ยางหน้า L / R (PSI)",fg(s),false,false);s.tyresRear=metric(a,s,v2,"ยางหลัง L / R (PSI)",fg(s),false,false);
-  LinearLayout v3=row(a);add(body,v3,metricsH);s.soh=metric(a,s,v3,"SOH จาก BMS",green(s),false,false);s.byd=metric(a,s,v3,"ข้อมูล BYD",fg(s),false,false);
-  LinearLayout m4=row(a);add(body,m4,metricsH);s.gps=metric(a,s,m4,"GPS",fg(s),false,false);
+  LinearLayout v1=row(a);v1.setTag("nat_custom_temperature");add(body,v1,metricsH);s.outside=metric(a,s,v1,"อุณหภูมิภายนอก",fg(s),false,false);s.battTemp=metric(a,s,v1,"อุณหภูมิแบตเฉลี่ย",fg(s),false,false);
+  LinearLayout v2=row(a);v2.setTag("nat_custom_tyres");add(body,v2,metricsH);s.tyresFront=metric(a,s,v2,"ยางหน้า L / R (PSI)",fg(s),false,false);s.tyresRear=metric(a,s,v2,"ยางหลัง L / R (PSI)",fg(s),false,false);
+  LinearLayout v3=row(a);v3.setTag("nat_custom_health");add(body,v3,metricsH);s.soh=metric(a,s,v3,"SOH จาก BMS",green(s),false,false);s.byd=metric(a,s,v3,"ข้อมูล BYD",fg(s),false,false);
+  LinearLayout m4=row(a);m4.setTag("nat_custom_gps");add(body,m4,metricsH);s.gps=metric(a,s,m4,"GPS",fg(s),false,false);
   s.host.addView(panel,new FrameLayout.LayoutParams(width,mapH,Gravity.RIGHT|Gravity.TOP));
+  applyCustom(a,s);
   LinearLayout footer=row(a);footer.setTag(OWN);footer.setBackgroundColor(surface(s));footer.setPadding(dp(a,3),0,dp(a,3),0);s.footer=footer;
+  action(a,s,footer,"Snow AI",8,()->NatV36Shortcuts.snow(a));
   action(a,s,footer,"Smart EV",6,()->NatSmartEvMenu.show(a));
   action(a,s,footer,"EV Charging",0,()->NatMinimalEv.splitAction(a,0));
-  action(a,s,footer,"Energy",1,()->NatMinimalEv.splitAction(a,1));
+  action(a,s,footer,"Control",7,()->NatV36Shortcuts.control(a));
   action(a,s,footer,"Charging Plan",2,()->NatMinimalEv.splitAction(a,2));
   action(a,s,footer,"Clean",3,()->NatMinimalEv.splitAction(a,3));
   action(a,s,footer,"Diagnostics",4,()->NatMinimalEv.splitAction(a,4));
   action(a,s,footer,"Full Map 100%",5,()->toggle(a));
   s.host.addView(footer,new FrameLayout.LayoutParams(-1,footerH,Gravity.BOTTOM|Gravity.LEFT));
+ }
+ private static final String[] CUSTOM_KEYS={"range","power","forecast","route","climate","daily","cost","temperature","tyres","health","gps"};
+ private static final String[] CUSTOM_NAMES={"ระยะขับได้ / ODO","ความเร็ว / POWER","พลังงานที่ต้องใช้ / อัตราสิ้นเปลือง","ระยะทาง / ETA","อุณหภูมิแอร์","ระยะทาง / พลังงานวันนี้","ค่าไฟต่อหน่วย / ค่าไฟวันนี้","อุณหภูมิภายนอก / แบต","ลมยางหน้า / หลัง","SOH / BYD","GPS"};
+ private static android.content.SharedPreferences customPrefs(Activity a){return a.getSharedPreferences("nat_v36_dashboard",0);}
+ private static void applyCustom(Activity a,State s){
+  if(s.detailsBody==null)return;
+  for(String k:CUSTOM_KEYS){View v=s.detailsBody.findViewWithTag("nat_custom_"+k);if(v!=null)v.setVisibility(customPrefs(a).getBoolean(k,true)?View.VISIBLE:View.GONE);}
+ }
+ static void customize(Activity a){
+  if(!active(a)||!a.hasWindowFocus())return;
+  boolean[] selected=new boolean[CUSTOM_KEYS.length];for(int i=0;i<selected.length;i++)selected[i]=customPrefs(a).getBoolean(CUSTOM_KEYS[i],true);
+  new android.app.AlertDialog.Builder(a).setTitle("Custom Dashboard").setMultiChoiceItems(CUSTOM_NAMES,selected,(d,i,b)->selected[i]=b)
+   .setNegativeButton("ยกเลิก",null).setNeutralButton("แสดงทั้งหมด",(d,w)->{customPrefs(a).edit().clear().apply();State s=states.get(a);if(s!=null)applyCustom(a,s);})
+   .setPositiveButton("บันทึก",(d,w)->{android.content.SharedPreferences.Editor e=customPrefs(a).edit();for(int i=0;i<selected.length;i++)e.putBoolean(CUSTOM_KEYS[i],selected[i]);e.apply();State s=states.get(a);if(s!=null)applyCustom(a,s);}).show();
  }
  private static void listen(Activity a,State s){
   if(s.listener!=null)return;
@@ -356,6 +372,8 @@ final class NatSplitScreen {
     case 2:for(int y=-8;y<=8;y+=8){c.drawCircle(-9,y,1,p);c.drawLine(-4,y,10,y,p);}break;
     case 3:c.drawCircle(0,0,10,p);c.drawLine(-7,7,7,-7,p);break;
     case 4:c.drawCircle(0,0,11,p);c.drawCircle(0,-5,1,p);c.drawLine(0,-1,0,6,p);break;
+    case 7:c.drawRoundRect(-12,-6,12,7,3,3,p);c.drawLine(-8,-6,-5,-11,p);c.drawLine(-5,-11,5,-11,p);c.drawLine(5,-11,8,-6,p);c.drawCircle(-7,8,2,p);c.drawCircle(7,8,2,p);break;
+    case 8:for(int k=0;k<6;k++){c.drawLine(0,0,0,-11,p);c.drawLine(0,-6,-3,-9,p);c.drawLine(0,-6,3,-9,p);c.rotate(60);}break;
     case 6:c.drawRoundRect(-11,-10,11,10,3,3,p);path.moveTo(2,-8);path.lineTo(-5,1);path.lineTo(0,1);path.lineTo(-2,8);path.lineTo(5,-1);path.lineTo(0,-1);path.close();c.drawPath(path,p);break;
     default:c.drawRoundRect(-11,-9,11,9,2,2,p);c.drawLine(3,-9,3,9,p);
    }c.restore();}

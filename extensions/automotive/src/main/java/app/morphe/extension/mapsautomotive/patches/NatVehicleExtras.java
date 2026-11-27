@@ -13,10 +13,13 @@ final class NatVehicleExtras {
  private static volatile Values cached;
  private static long last=-1,initAc=-60000,initTyre=-60000;
  private static Object ac,tyre;
- private static Method temp,unit,state,pressure,signal;
+ private static Method temp,unit,state,pressure,signal,systemState;
+ private static volatile String tyreDiag="TPMS: waiting for sample";
+ static String tyreDiagnostics(){return tyreDiag;}
  private static int mainZone,deputyZone,normal;private static int[] zones;
  private static String front="—",rear="—";private static long tyreAt=-1;
  static Values read(){Values v=cached;return BydBatteryPatch.isActive()&&v!=null&&NatSplitMath.fresh(SystemClock.elapsedRealtime(),v.at,3500)?v:null;}
+ private static String raw(int x){return x==Integer.MIN_VALUE?"unavailable":Integer.toString(x);}
  private static int get(Method m,Object target,Object...args){try{Object v=m.invoke(target,args);return v instanceof Number?((Number)v).intValue():Integer.MIN_VALUE;}catch(Throwable e){return Integer.MIN_VALUE;}}
  private static Object device(Class<?> type,Context c)throws Exception{return type.getMethod("getInstance",Context.class).invoke(null,c.getApplicationContext());}
  private static int constant(Class<?> type,String name)throws Exception{return type.getField(name).getInt(null);}
@@ -38,11 +41,19 @@ final class NatVehicleExtras {
    pressure=t.getMethod("getTyrePressureValue",int.class);signal=t.getMethod("getTyreSignalState",int.class);
    normal=constant(t,"TYRE_SIGNAL_STATE_NORMAL");
    zones=new int[]{constant(t,"TYRE_COMMAND_AREA_LEFT_FRONT"),constant(t,"TYRE_COMMAND_AREA_RIGHT_FRONT"),constant(t,"TYRE_COMMAND_AREA_LEFT_REAR"),constant(t,"TYRE_COMMAND_AREA_RIGHT_REAR")};
-   tyre=device(t,c);
-  }catch(Throwable e){tyre=null;ReportLog.i("NatVehicleExtras","TPMS named read unavailable");}}
+   tyre=device(t,c);try{systemState=t.getMethod("getTyreSystemState");}catch(NoSuchMethodException e){systemState=null;}
+   tyreDiag=tyre==null?"TPMS: device unavailable":"TPMS: SDK connected";
+  }catch(Throwable e){tyre=null;tyreDiag="TPMS init: "+e.getClass().getSimpleName()+(e.getCause()==null?"":" / "+e.getCause().getClass().getSimpleName());ReportLog.i("NatVehicleExtras",tyreDiag);}}
   if(tyreAt<0||now-tyreAt>=10000){
    tyreAt=now;String[] v={"—","—","—","—"};
-   if(tyre!=null)for(int i=0;i<4;i++)if(get(signal,tyre,zones[i])==normal)v[i]=NatV35Rules.psi(get(pressure,tyre,zones[i]));
+   if(tyre!=null){
+    StringBuilder info=new StringBuilder("TPMS • raw diagnostic (not confirmed PSI)");
+    if(systemState!=null)info.append("\nSystem state: ").append(raw(get(systemState,tyre)));
+    String[] labels={"FL","FR","RL","RR"};
+    for(int i=0;i<4;i++){int st=get(signal,tyre,zones[i]),kpa=get(pressure,tyre,zones[i]);info.append("\n").append(labels[i]).append(" signal=").append(raw(st)).append(" raw=").append(raw(kpa));if(st==normal)v[i]=NatV35Rules.psi(kpa);}
+    info.append("\nNormal signal code: ").append(normal).append("\nรถจอดอาจพัก TPMS • ตรวจเทียบกับหน้าปัด");
+    tyreDiag=info.toString();
+   }
    front=v[0]+" / "+v[1];rear=v[2]+" / "+v[3];
   }
   cached=new Values(now,d,p,front,rear);
