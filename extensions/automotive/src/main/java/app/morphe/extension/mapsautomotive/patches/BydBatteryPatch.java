@@ -330,6 +330,17 @@ public final class BydBatteryPatch {
         return active;
     }
 
+    // In-process diagnostics: cached state only, no SDK calls or vehicle writes.
+    static JSONObject diagnosticSnapshot() throws JSONException {
+        long now=SystemClock.elapsedRealtime(), at=lastSampleAt;
+        long age=at==0?-1:NatDiagnosticMath.age(now,at);
+        BydBatterySource source=active?reader:null;
+        String status=!active?"inactive":age<0?"waiting":age>FRESH_MS||energyModel==null?"stale / unavailable":"fresh";
+        return new JSONObject().put("source",source==null?"unknown":source instanceof TsEnergyReader?"TS car adapter":"BYD SDK")
+                .put("status",status).put("sample_age_ms",age<0?JSONObject.NULL:age)
+                .put("forecast",NatPrediction.freshSnapshot()==null?"unavailable / stale":"fresh (route UI not checked)");
+    }
+
     /** The dashboard percentage of the model Maps can read now, NaN while there is none (before a reading, or withdrawn). */
     /** Runs [task] on the BYD battery worker thread after [delayMs]; false when there is no worker (not active). */
     static boolean postToWorker(Runnable task, long delayMs) {
@@ -1577,6 +1588,10 @@ public final class BydBatteryPatch {
             natTimeline.setText(thai ? "NAT V2.0 — ประวัติการเดินทาง" : "NAT V2.0 — Trip Timeline");
             natTimeline.setOnClickListener(v -> NatTripTimeline.show(host));
             content.addView(natTimeline);
+            Button natDiagnostics = new Button(themed);
+            natDiagnostics.setText(thai ? "NAT System Diagnostics — CPU / RAM / GPS" : "NAT System Diagnostics — CPU / RAM / GPS");
+            natDiagnostics.setOnClickListener(v -> NatSystemDiagnostics.show(host));
+            content.addView(natDiagnostics);
             android.widget.Switch minimalEv = new android.widget.Switch(themed);
             minimalEv.setText(thai ? "ปุ่ม NAT และ Live Energy (ทดลอง)" : "NAT controls and Live Energy (experimental)");
             minimalEv.setChecked(NatMinimalEv.enabled(host));

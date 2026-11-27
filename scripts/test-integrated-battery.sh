@@ -213,3 +213,37 @@ public class TestNatRelease {
 JAVA
 javac --release 17 -encoding UTF-8 -d "$D" "$P/NatLiveEnergy.java" "$P/NatMinimalEvRules.java" "$D/TestNatRelease.java"
 java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatRelease
+
+cat > "$D/TestNatDiagnostics.java" <<'JAVA'
+package app.morphe.extension.mapsautomotive.patches;
+public class TestNatDiagnostics {
+ static int n;static void check(boolean x){if(!x)throw new AssertionError("Diagnostics case "+n);n++;}
+ static boolean eq(double a,double b){return Math.abs(a-b)<1e-8;}
+ static String gps(boolean p,Boolean e,boolean r,long age,boolean a,double acc,boolean f,int count,int used){return NatDiagnosticMath.gps(p,e,r,age,a,acc,f,count,used);}
+ public static void main(String[] args){
+  check(eq(NatDiagnosticMath.cpu(1000,2000,4),12.5));check(eq(NatDiagnosticMath.cpu(8000,2000,4),100));check(eq(NatDiagnosticMath.cpu(0,2000,4),0));
+  check(Double.isNaN(NatDiagnosticMath.cpu(-1,2000,4)));check(Double.isNaN(NatDiagnosticMath.cpu(1,0,4)));check(Double.isNaN(NatDiagnosticMath.cpu(1,1,0)));check(Double.isNaN(NatDiagnosticMath.cpu(8001,2000,4)));
+  check(NatDiagnosticMath.age(100,50)==50);check(NatDiagnosticMath.age(50,100)==-1);check(NatDiagnosticMath.age(100,-1)==-1);
+  check(NatDiagnosticMath.fresh(30000,0,30000));check(!NatDiagnosticMath.fresh(30001,0,30000));check(!NatDiagnosticMath.fresh(0,1,30000));
+  check(eq(NatDiagnosticMath.usedMemory(8388608,3145728),5));check(Double.isNaN(NatDiagnosticMath.usedMemory(0,0)));check(Double.isNaN(NatDiagnosticMath.usedMemory(2,3)));check(Double.isNaN(NatDiagnosticMath.usedMemory(2,-1)));
+  check(gps(false,true,true,0,true,5,true,12,5).equals("PERMISSION DENIED"));
+  check(gps(true,null,true,0,true,5,true,12,5).equals("UNKNOWN"));
+  check(gps(true,false,true,0,true,5,true,12,5).equals("GPS DISABLED"));
+  check(gps(true,true,false,0,true,5,true,12,5).equals("LOCATION REQUEST UNAVAILABLE"));
+  check(gps(true,true,true,30000,true,5,true,12,5).equals("FIX"));
+  check(gps(true,true,true,30001,true,5,true,12,5).equals("STALE LOCATION"));
+  check(gps(true,true,true,10,true,51,true,12,5).equals("FIX / LOW ACCURACY"));
+  check(gps(true,true,true,10,false,Double.NaN,true,12,5).equals("FIX / ACCURACY UNKNOWN"));
+  check(gps(true,true,true,-1,false,Double.NaN,false,-1,-1).equals("WAITING FOR GNSS"));
+  check(gps(true,true,true,-1,false,Double.NaN,true,0,0).equals("NO SATELLITES REPORTED"));
+  check(gps(true,true,true,-1,false,Double.NaN,true,4,0).equals("NO FIX"));
+  check(gps(true,true,true,-1,false,Double.NaN,true,4,2).equals("WAITING FOR LOCATION"));
+  check(gps(true,true,true,-1,false,Double.NaN,true,4,5).equals("UNKNOWN"));
+  check(eq(NatDiagnosticMath.skyRadius(90),0));check(eq(NatDiagnosticMath.skyRadius(0),1));check(eq(NatDiagnosticMath.skyRadius(45),.5));check(!NatDiagnosticMath.angle(360,45));check(!NatDiagnosticMath.angle(0,-1));check(NatDiagnosticMath.angle(359,90));
+  check(eq(NatDiagnosticMath.rate(100,5),5));check(Double.isNaN(NatDiagnosticMath.rate(0,0)));check(Double.isNaN(NatDiagnosticMath.rate(1,2)));
+  System.out.println("PASS: "+n+" NAT system diagnostics cases");
+ }
+}
+JAVA
+javac --release 17 -encoding UTF-8 -d "$D" "$P/NatDiagnosticMath.java" "$D/TestNatDiagnostics.java"
+java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatDiagnostics
