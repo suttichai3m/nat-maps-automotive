@@ -50,7 +50,7 @@ final class NatSplitScreen {
  private static final class State {
   FrameLayout host;View nativeView;FrameLayout.LayoutParams original,applied;
   LinearLayout panel,footer;TextView soc,arrival,arrivalLabel,speed,power,remaining,rate,distance,eta,gps,byd,heading;
-  ImageView hero;TextView range,odo,acDriver,acPassenger,todayKm,todayEnergy,tariff,todayCost,dayNote;LocationManager lm;LocationListener listener;
+  ImageView hero;TextView range,odo,acDriver,acPassenger,todayKm,todayEnergy,tariff,todayCost,dayNote,outside,battTemp,soh,tyresFront,tyresRear;LocationManager lm;LocationListener listener;
   WeakReference<View> blocked;int blockedW,blockedH;
   long bearingAt=-1,fixAt=-1,started,lastEvidence=-1,retryAt;
   double bearing=Double.NaN,turn=Double.NaN;
@@ -81,7 +81,7 @@ final class NatSplitScreen {
  private static void removeUi(State s){
   NatV33Telemetry.stop();
   remove(s.panel);remove(s.footer);s.panel=s.footer=null;s.hero=null;
-  s.range=s.odo=s.acDriver=s.acPassenger=s.todayKm=s.todayEnergy=s.tariff=s.todayCost=s.dayNote=null;
+  s.range=s.odo=s.acDriver=s.acPassenger=s.todayKm=s.todayEnergy=s.tariff=s.todayCost=s.dayNote=s.outside=s.battTemp=s.soh=s.tyresFront=s.tyresRear=null;
   s.soc=s.arrival=s.arrivalLabel=s.speed=s.power=s.remaining=s.rate=s.distance=s.eta=s.gps=s.byd=s.heading=null;
  }
  private static void restore(State s){
@@ -201,7 +201,7 @@ final class NatSplitScreen {
  private static void build(Activity a,State s,int width,int mapH,int footerH){
   s.dark=ColorScheme.nightColors(a);
   LinearLayout panel=vertical(a);panel.setTag(OWN);panel.setBackgroundColor(surface(s));panel.setPadding(dp(a,6),dp(a,5),dp(a,6),dp(a,4));s.panel=panel;
-  add(panel,text(a,"BYD SEAL  •  NAT V3.4",14,fg(s),true),dp(a,24));
+  add(panel,text(a,"BYD SEAL  •  NAT V3.5",14,fg(s),true),dp(a,24));
   s.hero=new ImageView(a);s.hero.setScaleType(ImageView.ScaleType.FIT_CENTER);
   s.hero.setContentDescription("BYD Seal blue, static studio image");s.hero.setImageBitmap(NatSealHero.bitmap());
   s.hero.setBackground(bg(a,0xff071522,0,8));s.hero.setClipToOutline(true);
@@ -229,7 +229,10 @@ final class NatSplitScreen {
   LinearLayout costs=row(a);add(body,costs,metricsH);s.tariff=metric(a,s,costs,"ค่าไฟ / kWh  ⚙",blue(s),false,false);s.todayCost=metric(a,s,costs,"ค่าไฟวันนี้ (ประมาณ)",green(s),false,false);
   View tariffCell=(View)s.tariff.getParent();tariffCell.setClickable(true);tariffCell.setFocusable(true);tariffCell.setContentDescription("ตั้งราคาค่าไฟต่อ kWh");tariffCell.setOnClickListener(v->editTariff(a,s));
   s.dayNote=text(a,"ข้อมูลตามช่วงที่แอปบันทึก",10,muted(s),false);add(body,s.dayNote,dp(a,20));
-  LinearLayout m4=row(a);add(body,m4,metricsH);s.gps=metric(a,s,m4,"GPS",fg(s),false,false);s.byd=metric(a,s,m4,"ข้อมูล BYD",fg(s),false,false);
+  LinearLayout v1=row(a);add(body,v1,metricsH);s.outside=metric(a,s,v1,"อุณหภูมิภายนอก",fg(s),false,false);s.battTemp=metric(a,s,v1,"อุณหภูมิแบตเฉลี่ย",fg(s),false,false);
+  LinearLayout v2=row(a);add(body,v2,metricsH);s.tyresFront=metric(a,s,v2,"ยางหน้า L / R (PSI)",fg(s),false,false);s.tyresRear=metric(a,s,v2,"ยางหลัง L / R (PSI)",fg(s),false,false);
+  LinearLayout v3=row(a);add(body,v3,metricsH);s.soh=metric(a,s,v3,"SOH จาก BMS",green(s),false,false);s.byd=metric(a,s,v3,"ข้อมูล BYD",fg(s),false,false);
+  LinearLayout m4=row(a);add(body,m4,metricsH);s.gps=metric(a,s,m4,"GPS",fg(s),false,false);
   s.host.addView(panel,new FrameLayout.LayoutParams(width,mapH,Gravity.RIGHT|Gravity.TOP));
   LinearLayout footer=row(a);footer.setTag(OWN);footer.setBackgroundColor(surface(s));footer.setPadding(dp(a,3),0,dp(a,3),0);s.footer=footer;
   action(a,s,footer,"Smart EV",6,()->NatSmartEvMenu.show(a));
@@ -317,8 +320,19 @@ final class NatSplitScreen {
   set(s.power,Double.isFinite(kw)?String.format(Locale.US,"%+.1f kW",kw):"—");s.power.setTextColor(Double.isFinite(kw)&&kw<0?green(s):fg(s));
   set(s.range,fmt(tele==null?Double.NaN:tele.range,"km"));
   set(s.odo,tele!=null&&Double.isFinite(tele.odo)?String.format(Locale.US,"%,.1f km",tele.odo):"—");
-  // The SDK setpoint and its scale are not validated on this firmware. Do not show fake AC values.
-  set(s.acDriver,"—");set(s.acPassenger,"—");updateDaily(a,s);
+  NatVehicleExtras.Values extra=NatVehicleExtras.read();
+  set(s.acDriver,extra==null?"—":extra.driver);set(s.acPassenger,extra==null?"—":extra.passenger);
+  int outside=BydBatteryPatch.natFreshOutsideC();set(s.outside,outside==BydOutsideTemperature.UNAVAILABLE?"—":outside+"°C");
+  set(s.tyresFront,extra==null?"—":extra.front);set(s.tyresRear,extra==null?"—":extra.rear);
+  String temp="—",health="—";try{
+   org.json.JSONObject j=BydBatteryPatch.natHealthSnapshot();
+   if(j!=null){long age=j.optLong("soh_read_age_s",-1),ta=j.optLong("temp_read_age_s",-1);
+    org.json.JSONObject t=j.optJSONObject("temp_c");
+    if(age>=0&&age<=3600&&!j.isNull("soh_percent"))health=j.optString("soh_percent")+"%";
+    if(ta>=0&&ta<=180&&t!=null&&!t.isNull("average"))temp=t.optString("average")+"°C";
+   }
+  }catch(Exception ignored){}
+  set(s.battTemp,temp);set(s.soh,health);updateDaily(a,s);
   set(s.remaining,fmt(match?f.remainingKwh:Double.NaN,"kWh"));
   set(s.rate,fmt(match?NatDailyMath.forecastRate(f.remainingKwh,f.km):Double.NaN,"kWh/100km"));
   set(s.distance,fmt(route==null?Double.NaN:route.km,"km"));

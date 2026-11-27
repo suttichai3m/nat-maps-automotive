@@ -65,7 +65,7 @@ public final class SendToCarPush {
     /** How Maps took the last trip push: started its screen at once, or only a notification. */
     static final String SHOWN_NOW = "now", SHOWN_NOTIFICATION = "notification";
     /** Over MicroG-RE's 90 s for an unanswered ping; every 3 min while Maps is visible. */
-    static final long NUDGE_GAP_MS = 100_000, PERIOD_MS = 3 * 60_000;
+    static final long NUDGE_GAP_MS = 100_000, PERIOD_MS = 110_000;
     /** The nudge reaches MicroG-RE after a force-stop too. */
     static final int NUDGE_FLAGS = Intent.FLAG_INCLUDE_STOPPED_PACKAGES;
     /** A nudge this recent is named in the push line. */
@@ -85,6 +85,40 @@ public final class SendToCarPush {
     private static int visible;
     private static Handler main;
     private static Context app;
+    private static boolean installed;
+    private static final Runnable recovery=()->recoverWhenDue("network/wake");
+    // Main-thread, single coalesced recovery. Retains the provider's 90 s heartbeat timeout.
+    private static void queueRecovery(){
+        if(main==null)return;main.removeCallbacks(recovery);main.postDelayed(recovery,1000);
+    }
+    private static void recoverWhenDue(String reason){
+        if(app==null||visible<=0||!SafeMode.on(app,SafeMode.SEND_TO_CAR))return;
+        long now=SystemClock.elapsedRealtime();
+        long wait=lastNudge>0&&now>=lastNudge?Math.max(0,NUDGE_GAP_MS-(now-lastNudge)):0;
+        if(wait>0){main.removeCallbacks(recovery);main.postDelayed(recovery,wait+250);return;}
+        nudge(app,reason);
+    }
+    private static void watchRecovery(Context application){
+        try{
+            android.net.ConnectivityManager cm=(android.net.ConnectivityManager)application.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if(cm!=null)cm.registerDefaultNetworkCallback(new android.net.ConnectivityManager.NetworkCallback(){
+                private android.net.Network validated;
+                @Override public void onCapabilitiesChanged(android.net.Network n,android.net.NetworkCapabilities caps){
+                    if(caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)&&!n.equals(validated)){validated=n;main.post(SendToCarPush::queueRecovery);}
+                    else if(n.equals(validated)&&!caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED))validated=null;
+                }
+                @Override public void onLost(android.net.Network n){if(n.equals(validated))validated=null;}
+            });
+        }catch(RuntimeException error){ReportLog.w(TAG,"Network recovery watch unavailable",error);}
+        try{
+            android.content.BroadcastReceiver receiver=new android.content.BroadcastReceiver(){
+                @Override public void onReceive(Context c,Intent i){if(Intent.ACTION_SCREEN_ON.equals(i.getAction()))queueRecovery();}
+            };
+            android.content.IntentFilter filter=new android.content.IntentFilter(Intent.ACTION_SCREEN_ON);
+            if(android.os.Build.VERSION.SDK_INT>=33)application.registerReceiver(receiver,filter,Context.RECEIVER_NOT_EXPORTED);
+            else application.registerReceiver(receiver,filter);
+        }catch(RuntimeException error){ReportLog.w(TAG,"Wake recovery watch unavailable",error);}
+    }
     private static final Runnable periodic = new Runnable() {
         @Override
         public void run() {
@@ -100,14 +134,15 @@ public final class SendToCarPush {
     // The activity watch and the nudges.
 
     /** From the main process's start (ReportPatch.onAppStart), before any activity. */
-    static void install(Context context) {
+    static synchronized void install(Context context) {
         try {
-            if (!SafeMode.on(context, SafeMode.SEND_TO_CAR)) return;
+            if (installed || !SafeMode.on(context, SafeMode.SEND_TO_CAR)) return;
             Context application = context.getApplicationContext();
             if (!(application instanceof Application)) return;
             app = application;
             main = new Handler(Looper.getMainLooper());
             ((Application) application).registerActivityLifecycleCallbacks(new Watch());
+            installed=true;watchRecovery(application);
             nudge(application, "start");
         } catch (Throwable error) {
             ReportLog.w(TAG, "push nudges not installed", error);
@@ -134,16 +169,16 @@ public final class SendToCarPush {
      * Asks MicroG-RE to check its push connection, on a validated network and 100 s after the last request at the
      * earliest. Returns whether it asked.
      */
-    static boolean nudge(Context context, String reason) {
+    static synchronized boolean nudge(Context context, String reason) {
         try {
             if (context == null || !SafeMode.on(context, SafeMode.SEND_TO_CAR)) return false;
             long now = SystemClock.elapsedRealtime();
             if (!due(lastNudge, now, NUDGE_GAP_MS)) return false;
             ReportDiagnostics.NetworkState network = ReportDiagnostics.readNetwork(context);
             if (network == null || network.absent() || !network.validated) return false;
-            lastNudge = now;
             boolean stopped = providerStopped(context);
             context.sendBroadcast(new Intent(RECONNECT).setPackage(SendToCarStatus.MICROG).addFlags(NUDGE_FLAGS));
+            lastNudge = now;
             String line = nudgeLine(reason, stopped);
             if (line != null) ReportLog.i(TAG, line);
             return true;
@@ -197,7 +232,7 @@ public final class SendToCarPush {
         public void onActivityStarted(Activity activity) {
             if (!maps(activity)) return;
             if (visible++ > 0) return;
-            nudge(activity.getApplicationContext(), "front");
+            queueRecovery();
             main.removeCallbacks(periodic);
             main.postDelayed(periodic, PERIOD_MS);
         }
@@ -205,11 +240,12 @@ public final class SendToCarPush {
         @Override
         public void onActivityStopped(Activity activity) {
             if (!maps(activity) || visible <= 0) return;
-            if (--visible == 0) main.removeCallbacks(periodic);
+            if (--visible == 0){main.removeCallbacks(periodic);main.removeCallbacks(recovery);}
         }
 
         @Override
         public void onActivityResumed(Activity activity) {
+            if(maps(activity))queueRecovery();
         }
 
         @Override

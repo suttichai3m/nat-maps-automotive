@@ -180,7 +180,10 @@ public final class SendToCarLinks {
 
     private static void deliver(Target target, WeakReference<Activity> asking, Intent intent, Uri referrer, String link,
                                 InFlight entry, Result result) {
-        finishExpanding(expanding, link, entry);
+        synchronized(expanding){
+            if(expanding.get(link)!=entry){ReportLog.i(TAG,"Superseded link result ignored");return;}
+            finishExpanding(expanding,link,entry);
+        }
         // For Send to car's status; the extras were already read in expand.
         boolean sentTrip;
         String type;

@@ -75,7 +75,8 @@ internal fun BytecodePatchContext.useColorScheme() {
     // Every anchor is checked, and the added method built, before the controller changes.
     val night = nightField(controller, update, call)
     val refresh = screensRefresh(controller)
-    requireExtensionMethod(COLOR_SCHEME_CLASS, "nativeModeValue", listOf("Ljava/lang/Enum;"), "Ljava/lang/Enum;")
+    requireExtensionMethod(COLOR_SCHEME_CLASS, "nativeScreenModeValue", listOf("Ljava/lang/Enum;"), "Ljava/lang/Enum;")
+    requireExtensionMethod(COLOR_SCHEME_CLASS, "nativeBasemapModeValue", listOf("Ljava/lang/Enum;"), "Ljava/lang/Enum;")
     val forceCode = nativeConsumerCode(controller, update)
     val refreshMethod = refreshMethod(controller, update, night, refresh, forceCode)
     giveNativeConsumerMode(controller, NIGHT_TRACE, "a")
@@ -298,7 +299,7 @@ private fun nativeConsumerCode(controller: ClassDef, update: Method): String {
         invoke-interface { v0 }, Laord;->d()Ljava/lang/Object;
         move-result-object v0
         check-cast v0, Ljnk;
-        const/4 v1, 0x0
+        const/4 v1, 0x1
         invoke-virtual { p0, v0, v1 }, Ljnh;->g(Ljnk;Z)V
         invoke-virtual { p0, v0, v1 }, Ljnh;->f(Ljnk;Z)V
     """.trimIndent()
@@ -319,8 +320,9 @@ private fun BytecodePatchContext.giveNativeConsumerMode(controller: ClassDef, tr
     val register = code[index].registerA()
     if (register != 2 || next?.opcode != Opcode.INVOKE_VIRTUAL || memberKey(next) != "Lowp;->ordinal()I" || next.location.labels.isNotEmpty())
         throw PatchException("NAT18: native color enum consumer changed")
+    val hook = if (trace == BASEMAP_TRACE) "nativeBasemapModeValue" else "nativeScreenModeValue"
     method.addInstructions(index + 1, """
-        invoke-static { v2 }, $COLOR_SCHEME_CLASS->nativeModeValue(Ljava/lang/Enum;)Ljava/lang/Enum;
+        invoke-static { v2 }, $COLOR_SCHEME_CLASS->$hook(Ljava/lang/Enum;)Ljava/lang/Enum;
         move-result-object v2
         check-cast v2, Lowp;
     """.trimIndent())

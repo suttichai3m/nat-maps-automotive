@@ -83,12 +83,13 @@ final class NatSmartEvMenu {
   },100);
  }
  private void home(){
-  heading("Smart EV  •  NAT V3.4");
+  heading("Smart EV  •  NAT V3.5");
   line("เลือกฟังก์ชัน • รายละเอียดควรเปิดดูเมื่อจอดรถ");
   action("⚡  Smart Charging Assistant",this::charging);
   action("◷  Daily Driving Timeline",()->closeThen(()->NatTripTimeline.show(a)));
   action("▥  Energy Intelligence",this::energy);
   action("＋  Vehicle Health Monitor",this::health);
+  action("Send to Car • สถานะการรับเส้นทาง",()->closeThen(()->SendToCarStatus.show(a,a.getWindow().peekDecorView())));
   action("ปิด / Close",()->dialog.dismiss());
  }
  private String num(double v,String unit){return Double.isFinite(v)?String.format(Locale.US,"%.1f %s",v,unit):"—";}
@@ -155,7 +156,9 @@ final class NatSmartEvMenu {
   metric("อุณหภูมิแบตเฉลี่ย",jsonValue(validTemp?temp:null,"average"," °C"));
   metric("สูงสุด / ต่ำสุด",jsonValue(validTemp?temp:null,"highest","°C")+" / "+jsonValue(validTemp?temp:null,"lowest","°C"));
   metric("อายุข้อมูลอุณหภูมิ",ta<0?"—":ta+" s");
-  metric("แรงดันลมยาง / 12V","ยังไม่รองรับ");
+  NatVehicleExtras.Values e=NatVehicleExtras.read();
+  metric("ยางหน้า L / R (PSI)",e==null?"—":e.front);metric("ยางหลัง L / R (PSI)",e==null?"—":e.rear);
+  metric("12V","ยังไม่รองรับ");
   line("อ่านจากข้อมูลสุขภาพแบตเดิมของ BYD • ไม่ใช่การวินิจฉัยความปลอดภัยของรถ • ไม่แสดงค่าที่หมดอายุ");
   action("รีเฟรชข้อมูล",this::health);action("System Diagnostics",()->closeThen(()->NatMinimalEv.splitAction(a,4)));action("‹ กลับเมนู",this::home);
  }

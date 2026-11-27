@@ -104,7 +104,24 @@ public final class ColorScheme {
     /** The side lights, for the report only, every this many low beam reads. */
     private static final int SIDE_LIGHTS_EVERY = 10;
 
-    private static volatile WeakReference<Controller> controller;
+    // Several Maps surfaces may have controllers. Refresh every still-live identity, not just the last one.
+    private static final java.util.ArrayList<WeakReference<Controller>> controllers=new java.util.ArrayList<>();
+    private static volatile String screenMode="unseen",basemapMode="unseen";
+    private static volatile long screenModeAt,basemapModeAt;
+    private static synchronized void rememberController(Controller c){
+        boolean found=false;
+        for(java.util.Iterator<WeakReference<Controller>> i=controllers.iterator();i.hasNext();){
+            Controller old=i.next().get();if(old==null)i.remove();else if(old==c)found=true;
+        }
+        if(!found){if(controllers.size()>=8)controllers.remove(0);controllers.add(new WeakReference<>(c));}
+    }
+    private static synchronized java.util.ArrayList<Controller> liveControllers(){
+        java.util.ArrayList<Controller> out=new java.util.ArrayList<>();
+        for(java.util.Iterator<WeakReference<Controller>> i=controllers.iterator();i.hasNext();){
+            Controller c=i.next().get();if(c==null)i.remove();else out.add(c);
+        }
+        return out;
+    }
     /** Maps' own night value at its last update, null before. */
     private static volatile Boolean mapsNight;
     /** The value given to Maps last and where it came from, null before Maps asked. */
@@ -173,8 +190,7 @@ public final class ColorScheme {
     public static boolean night(Controller maps, boolean mapsValue) {
         try {
             if (maps != null) {
-                WeakReference<Controller> current = controller;
-                if (current == null || current.get() != maps) controller = new WeakReference<>(maps);
+                rememberController(maps);
             }
             if (on() && Utils.isContextSet()) mapsValue = nightFlag(liveConfiguration().uiMode);
             mapsNight = mapsValue;
@@ -528,6 +544,15 @@ public final class ColorScheme {
         return current;
     }
 
+    public static Enum<?> nativeScreenModeValue(Enum<?> current){
+        Enum<?> selected=nativeModeValue(current);screenMode=selected==null?"null":selected.name();
+        screenModeAt=SystemClock.elapsedRealtime();return selected;
+    }
+    public static Enum<?> nativeBasemapModeValue(Enum<?> current){
+        Enum<?> selected=nativeModeValue(current);String next=selected==null?"null":selected.name();
+        if(!next.equals(basemapMode))ReportLog.i(TAG,"Native basemap consumer: "+next);
+        basemapMode=next;basemapModeAt=SystemClock.elapsedRealtime();return selected;
+    }
     static void refreshOnFocus(){if(on()&&Utils.isContextSet())refresh("activity focus");}
     private static void refresh(String reason) {
         mainHandler().post(() -> refreshAttempt(reason, ++refreshGeneration, 0));
@@ -538,9 +563,8 @@ public final class ColorScheme {
         {
             try {
                 NatArrivalUi.refreshColors();
-                WeakReference<Controller> current = controller;
-                Controller maps = current != null ? current.get() : null;
-                if (maps == null || !Utils.isContextSet()) {
+                java.util.ArrayList<Controller> live=liveControllers();
+                if (live.isEmpty() || !Utils.isContextSet()) {
                     ReportLog.i(TAG, "V3.1 refresh unavailable: controller or context missing (" + reason + ")");
                     if (attempt < 3) mainHandler().postDelayed(() -> refreshAttempt(reason, generation, attempt + 1), 500L << attempt);
                     return;
@@ -552,17 +576,15 @@ public final class ColorScheme {
                     config.uiMode = (config.uiMode & ~Configuration.UI_MODE_NIGHT_MASK)
                         | (target ? Configuration.UI_MODE_NIGHT_YES : Configuration.UI_MODE_NIGHT_NO);
                 }
-                if (maps.morpheRefreshNight(config)) {
-                    ReportLog.i(TAG, "Maps' screens refreshed for " + (Boolean.TRUE.equals(givenNight) ? "night" : "day")
-                            + " colors (" + reason + ")");
-                    // The refresh binds a Settings row again with the subtitle it was built with.
-                    subtitleAfterRefresh();
-                } else {
-                    ReportLog.i(TAG, "Controller reported no color change (" + reason + ")");
-                    subtitleAfterRefresh();
+                int completed=0;
+                for(Controller maps:live){
+                    try{if(maps.morpheRefreshNight(new Configuration(config)))completed++;}
+                    catch(Throwable error){ReportLog.w(TAG,"One native controller refresh failed",error);}
                 }
-                if (attempt == 0 && reason.startsWith("choice "))
-                    mainHandler().postDelayed(() -> refreshAttempt(reason, generation, 1), 750L);
+                ReportLog.i(TAG,"Native refresh callbacks "+completed+"/"+live.size()+"; screen="+screenMode+"; basemap="+basemapMode+" ("+reason+")");
+                subtitleAfterRefresh();
+                // A Settings transition or renderer setup can replace its controller shortly after a choice.
+                if(attempt<2)mainHandler().postDelayed(()->refreshAttempt(reason,generation,attempt+1),attempt==0?750L:1500L);
             } catch (Throwable error) {
                 ReportLog.w(TAG, "Color refresh failed", error);
                 if (attempt < 3)
@@ -736,7 +758,10 @@ public final class ColorScheme {
                 .put("side_lights", orNull(readingName(sideLights)))
                 .put("side_lights_raw", rawOrNull(sideLightsRaw))
                 .put("light_status", lightStatus)
-                .put("oem_night_fallback", orNull(oemFallback));
+                .put("oem_night_fallback", orNull(oemFallback))
+                .put("native_screen_mode",screenMode).put("native_basemap_mode",basemapMode)
+                .put("native_screen_age_ms",screenModeAt==0?JSONObject.NULL:SystemClock.elapsedRealtime()-screenModeAt)
+                .put("native_basemap_age_ms",basemapModeAt==0?JSONObject.NULL:SystemClock.elapsedRealtime()-basemapModeAt);
     }
 
     private static String readingName(int reading) {

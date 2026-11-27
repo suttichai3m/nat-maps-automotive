@@ -357,6 +357,9 @@ public final class BydBatteryPatch {
     static int outsideC() {
         return sampleOutsideC;
     }
+    static int natFreshOutsideC(){
+        return active&&lastSampleAt>0&&SystemClock.elapsedRealtime()-lastSampleAt<=FRESH_MS?sampleOutsideC:BydOutsideTemperature.UNAVAILABLE;
+    }
 
     /** What the model Maps last read was: "adjusted;factor=…;aux_w=…", "table", "fallback", or "none" before a read. */
     static String mapsModel() {
@@ -489,8 +492,10 @@ public final class BydBatteryPatch {
     private static void pollNatFast(){
         if(!active)return;
         try{
-            if(NatV33Telemetry.wanted(SystemClock.elapsedRealtime())&&reader instanceof BydEnergyReader)
+            if(NatV33Telemetry.wanted(SystemClock.elapsedRealtime())&&reader instanceof BydEnergyReader){
                 NatV33Telemetry.fast(((BydEnergyReader)reader).readFast());
+                NatVehicleExtras.poll(context);
+            }
         }catch(Throwable ignored){NatV33Telemetry.fast(null);}
         if(worker!=null)worker.postDelayed(BydBatteryPatch::pollNatFast,500);
     }
