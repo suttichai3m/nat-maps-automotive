@@ -85,6 +85,7 @@ final class NatSmartEvMenu {
  private void home(){
   heading("Smart EV  •  NAT V3.6");
   line("เลือกฟังก์ชัน • รายละเอียดควรเปิดดูเมื่อจอดรถ");
+  action("★  Favorite Destinations • สถานที่โปรด",()->closeThen(()->NatFavorites.show(a)));
   action("⚡  Smart Charging Assistant",this::charging);
   action("◷  Daily Driving Timeline",()->closeThen(()->NatTripTimeline.show(a)));
   action("▥  Energy Intelligence",this::energy);

@@ -201,11 +201,14 @@ final class NatMinimalEv {
     }
     private static TextView snowButton(Activity a){return toolbarButton(a,"❄","Snow AI",()->NatV36Shortcuts.snow(a));}
     private static TextView splitButton(Activity a){
-        return toolbarButton(a,"▥","Split Screen 75:25",()->{
+        TextView button=toolbarButton(a,"▥","Split Screen 75:25",()->{
             View root=a.getWindow().peekDecorView();
             if(a.isFinishing()||a.isDestroyed()||!a.hasWindowFocus()||root==null||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY)||!controls(root).mapControls)return;
             NatSplitScreen.toggle(a);
         });
+        button.setTooltipText("Split Screen 75:25 • hold: Favorite Destinations");
+        button.setOnLongClickListener(v->{NatFavorites.show(a);return true;});
+        return button;
     }
     private static void switchPanel(Activity a,State s,int which){
         if(a.isFinishing()||a.isDestroyed()||!a.hasWindowFocus()||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY))return;
