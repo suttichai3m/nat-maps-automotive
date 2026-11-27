@@ -18,6 +18,7 @@ final class NatV36Daily {
  static void observe(Context c,BydEnergyReader.Sample s){
   energy=new Energy(s.elapsed,s.soc,s.energy,s.speedKmh);
   SharedPreferences p=pref(c);String d=day(s.wall);boolean same=d.equals(p.getString("day",""));
+  if(p.contains("charge_start")&&Double.isFinite(s.speedKmh)&&s.speedKmh>1&&s.speedKmh<=250&&!p.getBoolean("charge_moved",false))p.edit().putBoolean("charge_moved",true).apply();
   long m=same?p.getLong("moving",0):0,z=same?p.getLong("stopped",0):0;
   long dt=s.elapsed-previous;
   int kind=d.equals(previousDay)?NatV36Rules.interval(dt,previousSpeed,s.speedKmh):0;
@@ -32,18 +33,19 @@ final class NatV36Daily {
  static String beginCharge(Context c){
   SharedPreferences p=pref(c);Energy e=energy();if(p.contains("charge_start"))return "มีช่วงที่เปิดอยู่แล้ว";
   if(e==null||!NatV36Rules.stopped(e.speed))return "ต้องมีข้อมูลรถสดและรถหยุดนิ่ง";
-  p.edit().putLong("charge_start",System.currentTimeMillis()).putFloat("charge_kwh",(float)e.kwh).putFloat("charge_rate",(float)NatV33Telemetry.tariff(c)).apply();return "เริ่มบันทึกแล้ว (ด้วยตนเอง)";
+  p.edit().putLong("charge_start",System.currentTimeMillis()).putFloat("charge_kwh",(float)e.kwh).putFloat("charge_rate",(float)NatV33Telemetry.tariff(c)).remove("charge_moved").apply();return "เริ่มบันทึกแล้ว (ด้วยตนเอง)";
  }
  static String endCharge(Context c){
   SharedPreferences p=pref(c);Energy e=energy();long start=p.getLong("charge_start",0),now=System.currentTimeMillis();
-  if(start<=0)return "ยังไม่ได้เริ่มบันทึก";if(e==null||!NatV36Rules.stopped(e.speed))return "ต้องมีข้อมูลรถสดและรถหยุดนิ่ง";
+  if(start<=0)return "ยังไม่ได้เริ่มบันทึก";if(p.getBoolean("charge_moved",false))return "พบรถเคลื่อนที่ระหว่างช่วงที่บันทึก • ยกเลิกช่วงนี้ก่อน";if(e==null||!NatV36Rules.stopped(e.speed))return "ต้องมีข้อมูลรถสดและรถหยุดนิ่ง";
   double kwh=NatV36Rules.chargeDelta(p.getFloat("charge_kwh",Float.NaN),e.kwh,now-start);
   if(!Double.isFinite(kwh))return "ข้อมูลไม่สอดคล้อง • ไม่บันทึกค่าไฟ";
   double cost=NatDailyMath.cost(kwh,p.getFloat("charge_rate",7f));
   String record=String.format(Locale.US,"%s • %.1f kWh • ฿%.2f • %s",day(now),kwh,cost,duration(now-start));
   String history=record+"\n"+p.getString("history","");
   String[] lines=history.split("\n");StringBuilder retained=new StringBuilder();for(int i=0;i<Math.min(30,lines.length);i++)retained.append(lines[i]).append("\n");
-  p.edit().remove("charge_start").remove("charge_kwh").remove("charge_rate").putString("history",retained.toString()).apply();return "บันทึกแล้ว: "+record;
+  p.edit().remove("charge_start").remove("charge_kwh").remove("charge_rate").remove("charge_moved").putString("history",retained.toString()).apply();return "บันทึกแล้ว: "+record;
  }
+ static void cancelCharge(Context c){pref(c).edit().remove("charge_start").remove("charge_kwh").remove("charge_rate").remove("charge_moved").apply();}
  static String history(Context c){String h=pref(c).getString("history","");return h.isEmpty()?"ยังไม่มีประวัติ":h;}
 }

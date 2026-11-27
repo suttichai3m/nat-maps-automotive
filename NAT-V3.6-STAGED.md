@@ -6,3 +6,5 @@
 - Daily observed moving/stopped intervals, no gaps filled. Manual charge start/end records net BMS increase and estimated tariff cost (up to 30 entries), not station billing or confirmed charge detection. Do not drive during manual charge session. No auto-detection, instantaneous charging power/ETA, live POWER/REGEN or 12V until signals validated.
 - User-set service odometer reminder and persistent dashboard row visibility. Core SOC cards stay visible. No row reordering yet. Energy Intelligence retained in Smart EV.
 - New CI tests cover timing, charge delta and collision-safe toolbar fallback. Full Android build, patch application and parked vehicle tests required. Not release certified.
+
+Manual charge sessions can be cancelled; recorded movement invalidates the session. Unobserved gaps are still not verified, so no claim of automatic charge detection or station-billed energy.

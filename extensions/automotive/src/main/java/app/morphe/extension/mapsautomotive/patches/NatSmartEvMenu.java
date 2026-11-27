@@ -161,6 +161,7 @@ final class NatSmartEvMenu {
   line(NatV36Daily.chargeStatus(a));
   action("เริ่มบันทึกช่วงชาร์จ",()->{line(NatV36Daily.beginCharge(a));});
   action("จบบันทึกช่วงชาร์จ",()->{line(NatV36Daily.endCharge(a));});
+  action("ยกเลิกช่วงชาร์จ",()->new AlertDialog.Builder(a).setTitle("ยกเลิกช่วงที่กำลังบันทึก?").setNegativeButton("กลับ",null).setPositiveButton("ยืนยัน",(d,w)->{NatV36Daily.cancelCharge(a);chargingHistory();}).show());
   line(NatV36Daily.history(a));
   action("รีเฟรช",this::chargingHistory);action("‹ กลับเมนู",this::home);
  }
