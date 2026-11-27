@@ -1,8 +1,3 @@
-# NAT V2.0 — Trip Timeline preview
-
-Entry: BYD battery settings > NAT V2.0 — Trip Timeline. Recording is off by default.
-Enable while parked, grant Maps location permission via Android settings if required. Existing BYD worker samples every ~10 s. Requests GPS while vehicle speed is available and above 1 km/h. Stops after stationary samples for five minutes or when disabled. No new foreground service; recording outside navigation depends on process survival and Android location policy. No guaranteed recording after process kill or vehicle shutdown.
-
-Private SQLite database, 90 days / 100,000 points, accurate fresh fixes only. No network or paid API. Daily history, schematic GPS trace (not a street map), segment summaries and explicit CSV export. Battery decrease sums are partial observations, not net energy, and cannot account for charging. No claim of full V1.7–1.9 integration or continuous recording. Export contains sensitive location data. Delete disables recording and clears database; exported copies remain.
-
-Acceptance: build, open settings, enable, drive with GPS permission, park, inspect timeline, switch dates, export, disable, verify no new rows, delete. Test process kill, permission revocation, SDK unavailable, GPS gaps and vehicle sleep. Do not interact while driving.
+# V2.0 expanded candidate
+Opt-in GPS timeline under BYD battery settings. Daily / rolling 7 / 30 days; schematic route and timestamp seek replay; CSV, GPX, JSON explicit export. Location stored privately, 90 days/100k points; exported files are sensitive and are not removed by history deletion. GPS watchdog removes requests after missing vehicle polls; no new foreground service. Works only while existing BYD worker and OS permission allow. No guaranteed after kill. No paid Google API.
+Energy is observed battery change on close sample pairs, not confirmed consumption/regen. Prediction uses SOC/capacity estimate, not direct kWh from Maps. Native EV search intent and offline charging calculator; not an overlay, no station availability. Full street map, MP4 export, independent background service and calibrated live power/regen remain open. Use UI while parked.
