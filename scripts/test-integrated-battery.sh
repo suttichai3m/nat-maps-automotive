@@ -405,6 +405,14 @@ class TestNatSplit {
   check(!NatSplitMath.moving(0));
   check(!NatSplitMath.moving(Double.NaN));
   check(!NatSplitMath.moving(251));
+  check(NatSplitMath.ownsGeometry(600,424,51,600,424,51));
+  check(!NatSplitMath.ownsGeometry(800,424,51,600,424,51));
+  check(!NatSplitMath.ownsGeometry(600,480,51,600,424,51));
+  check(!NatSplitMath.ownsGeometry(600,424,5,600,424,51));
+  check(!NatSplitMath.ownsGeometry(-1,424,51,-1,424,51));
+  check(!NatSplitMath.ownsGeometry(600,0,51,600,0,51));
+  check(Double.isNaN(NatSplitMath.turn(10,30,251,1000)));
+  check(NatSplitMath.turn(10,30,250,1000)==20);
   System.out.println("PASS: "+n+" NAT V3.0 split and motion cases");
  }
 }

@@ -161,6 +161,7 @@ final class NatNavigationCard {
     private static final WeakHashMap<View,Long> VERIFIED=new WeakHashMap<>();
     private static final WeakHashMap<View,double[]> ROUTES=new WeakHashMap<>();
     static boolean recentlyVerified(View root){Long t=VERIFIED.get(root);long now=android.os.SystemClock.elapsedRealtime();return root.hasWindowFocus()&&t!=null&&now>=t&&now-t<=2000;}
+    static void invalidateRoute(View root){VERIFIED.remove(root);ROUTES.remove(root);ETAS.remove(root);}
     static double verifiedKm(View root){double[] m=ROUTES.get(root);return m!=null&&recentlyVerified(root)?m[1]:Double.NaN;}
     private static final WeakHashMap<View,String> ETAS=new WeakHashMap<>();
     static String verifiedEta(View root){return recentlyVerified(root)?ETAS.get(root):null;}
@@ -293,7 +294,7 @@ final class NatNavigationCard {
     }
     private static NatBatteryPlacement.Box box(Rect r){return new NatBatteryPlacement.Box(r.left,r.top,r.width(),r.height());}
     static void refresh(View root) {
-        if (!root.isShown() || !root.hasWindowFocus() || !SafeMode.on(root.getContext(), SafeMode.BYD_BATTERY)) { clear(root); status(root,"inactive"); return; }
+        if (!root.isShown() || !root.hasWindowFocus() || !SafeMode.on(root.getContext(), SafeMode.BYD_BATTERY)) { clear(root); invalidateRoute(root); status(root,"inactive"); return; }
         List<Match> matches=matches(root);
         if(matches.size()==1&&matches.get(0).panel!=null){VERIFIED.put(root,android.os.SystemClock.elapsedRealtime());ROUTES.put(root,new double[]{matches.get(0).soc,matchKm(matches.get(0))});ETAS.put(root,matchEta(matches.get(0)));}else{VERIFIED.remove(root);ROUTES.remove(root);ETAS.remove(root);}
         if(NatMinimalEv.enabled(root.getContext())){

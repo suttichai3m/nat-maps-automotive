@@ -23,11 +23,16 @@ final class NatSplitScreen {
  private static final class Motion {final long at;final double speed;Motion(long t,double s){at=t;speed=s;}}
  static void observe(long at,double speed){sample=new Motion(at,speed);}
  static boolean active(Activity a){State s=states.get(a);return s!=null&&s.panel!=null&&s.footer!=null&&s.nativeView!=null&&s.panel.getParent()==s.host&&s.footer.getParent()==s.host&&s.nativeView.getParent()==s.host;}
+ static boolean ownsRoot(View root){
+  if(root==null)return false;
+  for(State s:states.values())if(s!=null&&s.host!=null&&s.panel!=null&&s.panel.getParent()==s.host&&s.host.getRootView()==root)return true;
+  return false;
+ }
  static boolean enabled(Activity a){return a.getSharedPreferences(PREF,0).getBoolean("split",true);}
  static String status(Activity a){State s=states.get(a);return s==null?"Waiting for map":s.reason;}
  static void toggle(Activity a){
   boolean on=!enabled(a);a.getSharedPreferences(PREF,0).edit().putBoolean("split",on).apply();
-  State s=states.get(a);if(s!=null){restore(s);s.blocked=null;s.reason=on?"Split requested":"Full Map requested";}
+  State s=states.get(a);if(s!=null){restore(s);s.blocked=null;s.retryAt=0;s.reason=on?"Split requested":"Full Map requested";}
   if(on)refresh(a,a.getWindow().peekDecorView());
  }
  private static int dp(Context c,int n){return Math.round(n*c.getResources().getDisplayMetrics().density);}
@@ -69,8 +74,21 @@ final class NatSplitScreen {
  }
  private static void restore(State s){
   stopGps(s);removeUi(s);
-  if(s.nativeView!=null&&s.nativeView.getParent()==s.host&&s.nativeView.getLayoutParams()==s.applied)s.nativeView.setLayoutParams(s.original);
-  s.host=null;s.nativeView=null;s.original=s.applied=null;s.lastEvidence=-1;
+  try{
+   if(s.nativeView!=null&&s.nativeView.getParent()==s.host&&s.original!=null&&s.applied!=null){
+    ViewGroup.LayoutParams raw=s.nativeView.getLayoutParams();
+    if(raw==s.applied)s.nativeView.setLayoutParams(s.original);
+    else if(raw instanceof FrameLayout.LayoutParams){
+     FrameLayout.LayoutParams lp=(FrameLayout.LayoutParams)raw;
+     if(NatSplitMath.ownsGeometry(lp.width,lp.height,lp.gravity,s.applied.width,s.applied.height,s.applied.gravity)){
+      FrameLayout.LayoutParams back=new FrameLayout.LayoutParams(lp);
+      back.width=s.original.width;back.height=s.original.height;back.gravity=s.original.gravity;
+      s.nativeView.setLayoutParams(back);
+     }
+    }
+   }
+  }catch(RuntimeException error){ReportLog.w("NatSplitScreen","Native restore failed",error);}
+  finally{s.host=null;s.nativeView=null;s.original=s.applied=null;s.lastEvidence=-1;}
  }
  private static void fail(State s,String reason,boolean block,int w,int h){
   if(block&&s.nativeView!=null){s.blocked=new WeakReference<>(s.nativeView);s.blockedW=w;s.blockedH=h;}
@@ -128,7 +146,7 @@ final class NatSplitScreen {
    }
    if(s.listener==null)listen(a,s);
    update(a,s,root);
-   if(now-s.started>2000)s.reason="Split 75/25 | native geometry checked | dashboard attached | "+(NatNavigationCard.recentlyVerified(root)?"route verified":"route unverified");
+   if(now-s.started>2000)s.reason="Split 75/25 | native geometry checked | dashboard attached | "+(NatNavigationCard.recentlyVerified(root)?"route verified":"route unverified")+" | Current "+s.soc.getText()+" | Arrival "+s.arrival.getText();
   }catch(RuntimeException e){fail(s,"Full Map: split exception; restored",true,s.host==null?0:s.host.getWidth(),s.host==null?0:s.host.getHeight());ReportLog.w("NatSplitScreen","Split layout restored",e);}
  }
  private static boolean disjoint(State s){

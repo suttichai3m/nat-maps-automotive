@@ -1,14 +1,26 @@
-name: NAT V3.1 integrated candidate build
+name: NAT V3.0 Smart Split Screen build
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - nat-split-screen
 permissions:
   contents: read
   packages: read
 jobs:
   build:
+    if: github.ref == 'refs/heads/nat-split-screen'
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify branch and commit
+        run: |
+          test "$GITHUB_REF" = refs/heads/nat-split-screen
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git log -1 --oneline
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -37,6 +49,6 @@ jobs:
           bash gradlew --no-daemon buildAndroid
       - uses: actions/upload-artifact@v4
         with:
-          name: NAT-V3.1-integrated-candidate-mpp
+          name: NAT-V3.0-smart-split-screen-mpp-${{ github.run_number }}
           path: patches/build/libs/*.mpp
           if-no-files-found: error

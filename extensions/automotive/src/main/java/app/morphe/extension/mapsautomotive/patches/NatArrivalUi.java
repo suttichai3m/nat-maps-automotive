@@ -121,10 +121,10 @@ public final class NatArrivalUi {
                         scan(root, 0);
                         NatSplitScreen.refresh(a,root);
                         try { NatMinimalEv.refresh(a,root); } catch (RuntimeException error) { NatMinimalEv.clear(a); ReportLog.w("NatMinimalEv","Overlay refresh failed",error); }
-                    } else { focused=false; NatSplitScreen.suspend(a); if(!SafeMode.on(a,SafeMode.BYD_BATTERY))NatSplitScreen.clear(a); if(root!=null){NatNavigationCard.clear(root);NatMinimalEv.clear(a);} }
+                    } else { focused=false; NatSplitScreen.suspend(a); if(!SafeMode.on(a,SafeMode.BYD_BATTERY))NatSplitScreen.clear(a); if(root!=null){NatNavigationCard.clear(root);NatNavigationCard.invalidateRoute(root);NatMinimalEv.clear(a);} }
                 } catch (RuntimeException error) {
                     View root = a.getWindow().peekDecorView();
-                    if (root != null) NatNavigationCard.clear(root);
+                    if (root != null) {NatNavigationCard.clear(root);NatNavigationCard.invalidateRoute(root);}
                     NatMinimalEv.clear(a);
                     NatSplitScreen.clear(a);
                     ReportLog.w("NatArrivalUi", "Scan failed", error);
@@ -185,6 +185,8 @@ public final class NatArrivalUi {
         });
     }
     private static void scan(View view, int depth) {
+        // Dedicated dashboard owns SOC. Never add legacy spans to native Maps while split is attached.
+        if(depth==0&&NatSplitScreen.ownsRoot(view.getRootView()))return;
         if (depth > 40 || view.getVisibility() != View.VISIBLE || NatMinimalEv.owned(view)) return;
         if (view instanceof TextView) {
             TextView tv = (TextView) view;

@@ -398,7 +398,19 @@ final class NatMinimalEv {
         else if(action==4)NatSystemDiagnostics.show(a);
     }
     static void refresh(Activity a,View root){
-        if(NatSplitScreen.active(a)){State s=STATES.get(a);if(s!=null){remove(s.host());removePanel(s);removeMini(s,true);removeMini(s,false);remove(s.arrival==null?null:s.arrival.get());s.arrival=null;s.arrivalKey="";s.toolbar=null;s.mode=0;}return;}
+        if(NatSplitScreen.active(a)){
+            State s=STATES.get(a);
+            if(s!=null){
+                // Preserve confirmation during native EV search, including long-running results.
+                NatPrediction.Snapshot f=NatPrediction.freshSnapshot();
+                if(f!=null&&s.previousSession>=0&&s.previousSession!=f.session){resetSearch(s);s.categoryUntil=-1;}
+                if(f!=null)s.previousSession=f.session;
+                updateSearch(s,controls(root));
+                remove(s.host());removePanel(s);removeMini(s,true);removeMini(s,false);
+                remove(s.arrival==null?null:s.arrival.get());s.arrival=null;s.arrivalKey="";s.toolbar=null;s.mode=0;
+            }
+            return;
+        }
         if(root==null||!enabled(a)||!root.hasWindowFocus()||!SafeMode.on(a,SafeMode.BYD_BATTERY)){clear(a);return;}
         View content=a.findViewById(android.R.id.content);if(!(content instanceof FrameLayout)){clear(a);return;}
         FrameLayout host=(FrameLayout)content;
