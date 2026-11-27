@@ -53,6 +53,10 @@ class TestIntegrated {
   check(Objects.equals(16,NatNavigationSummary.parse("465 กม. · 14:21 น. · 16% 🔋")),"charging stop icon suffix");cases++;
   check(Objects.equals(-31,NatNavigationSummary.parse("754 กม. · 18:36 น. · -31% 🔋")),"negative route icon suffix");cases++;
   check(NatNavigationSummary.parse("465 กม. · 14:21 น. · 16% · 92%")==null,"ambiguous charging SOC rejected");cases++;
+  check(Objects.equals(-61,NatNavigationSummary.parse("942 กม. · 21:21 น. · -61%")),"observed negative arrival");cases++;
+  check(Objects.equals(92,NatNavigationSummary.parse("18 กม. · 09:13 น. · 92%")),"observed positive arrival");cases++;
+  check(Objects.equals(16,NatNavigationSummary.parse("465 กม. · 14:21 น. · 16%")),"replanned route arrival");cases++;
+  check(NatNavigationSummary.parse("942 กม. · 21:21 น. · -61% · 16%")==null,"do not confuse charge stop with destination");cases++;
   // Long Thai trip summary: reject candidates covering the ETA/distance prefix.
   for(int scale:new int[]{1,2,3}){
    NatBatteryPlacement.Box longPanel=b(0,0,360*scale,124*scale);

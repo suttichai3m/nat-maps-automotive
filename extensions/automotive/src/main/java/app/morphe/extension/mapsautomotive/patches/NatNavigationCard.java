@@ -198,14 +198,20 @@ final class NatNavigationCard {
     private static void findIcons(View v, Match m, Rect soc, List<View> result, int depth) {
         if(depth>40 || !v.isShown()) return;
         if(v instanceof android.widget.ImageView && !v.isClickable() && !v.isLongClickable() && !v.isFocusable()
-                && v.getId()!=View.NO_ID) {
+                 ) {
             try {
-                String name=v.getResources().getResourceEntryName(v.getId()).toLowerCase(java.util.Locale.ROOT);
+                String name="";
+                if(v.getId()!=View.NO_ID) try { name=v.getResources().getResourceEntryName(v.getId()).toLowerCase(java.util.Locale.ROOT); } catch(android.content.res.Resources.NotFoundException ignored) {}
                 boolean named=name.equals("battery_icon") || name.equals("arrival_battery_icon")
                     || name.equals("status_panel_battery_icon") || name.equals("battery_level_icon")
-                    || name.equals("arrival_soc_icon");
+                    || name.equals("arrival_soc_icon") || name.equals("status_panel_battery")
+                    || name.equals("status_panel_arrival_battery_icon");
+                CharSequence description=v.getContentDescription();
+                String label=description==null?"":description.toString().trim().toLowerCase(java.util.Locale.ROOT);
+                named = named || label.equals("arrival battery") || label.equals("battery on arrival")
+                    || label.equals("แบตเมื่อถึง") || label.equals("แบตเตอรี่เมื่อถึงปลายทาง");
                 Rect r=new Rect(); float d=v.getResources().getDisplayMetrics().density;
-                if(named && v.getGlobalVisibleRect(r) && r.width()<=48*d && r.height()<=48*d
+                if(named && m.soc>=0 && v.getGlobalVisibleRect(r) && r.width()<=48*d && r.height()<=48*d
                         && Math.abs(r.centerY()-soc.centerY())<=24*d && Math.abs(r.centerX()-soc.centerX())<=96*d)
                     result.add(v);
             } catch(android.content.res.Resources.NotFoundException ignored) {}
@@ -323,7 +329,7 @@ final class NatNavigationCard {
             return;
         }
         syncIcon(c,match,regions[0]);
-        status(root,"visible " + placement + " " + match.kind + " " + chosen + "dp native SOC hidden; separate icon " + (c.icon!=null));
+        status(root,"visible " + placement + " " + match.kind + " " + chosen + "dp native SOC hidden; separate icon " + (c.icon!=null) + (soc<0?" negative warning retained":""));
         if(c.soc==soc && c.thai==thai && c.dark==dark && c.getBounds().equals(area)) return;
         c.soc=soc; c.thai=thai; c.dark=dark; c.setBounds(area); c.invalidateSelf();
     }
@@ -343,7 +349,7 @@ final class NatNavigationCard {
             c.drawRoundRect(new RectF(b),10*u,10*u,p);
             p.setTextAlign(Paint.Align.CENTER); p.setTypeface(Typeface.DEFAULT); p.setTextSize(11*u); p.setColor(fg);
             c.drawText(thai?"แบตเมื่อถึงปลายทาง":"Arrival battery",b.centerX(),b.top+13*u,p);
-            float l=b.left+5*u,r=b.right-9*u,t=b.top+18*u,bot=b.top+(soc<0?60:76)*u;
+            float l=b.left+5*u,r=b.right-9*u,t=b.top+18*u,bot=b.top+76*u;
             if(soc>0) {
                 float fill=(r-l-6*u)*NatSignedSoc.bar(soc)/100f;
                 int save=c.save();
@@ -356,15 +362,15 @@ final class NatNavigationCard {
             c.drawRoundRect(l,t,r,bot,8*u,8*u,p);
             p.setStyle(Paint.Style.FILL);
             c.drawRoundRect(r+u,(t+bot)/2-9*u,r+5*u,(t+bot)/2+9*u,2*u,2*u,p);
-            p.setTypeface(Typeface.DEFAULT_BOLD); p.setTextSize((soc<0?32:40)*u);
+            p.setTypeface(Typeface.DEFAULT_BOLD); p.setTextSize(40*u);
             String number=soc+"%";
             float max=r-l-12*u;
             if(p.measureText(number)>max) p.setTextSize(p.getTextSize()*max/p.measureText(number));
             p.setColor(soc<0?accent:fg);
-            c.drawText(number,(l+r)/2,(t+bot)/2-(p.ascent()+p.descent())/2,p);
+            c.drawText(number,(l+r)/2,(t+bot)/2-(p.ascent()+p.descent())/2-(soc<0?5*u:0),p);
             if(soc<0) {
-                p.setTypeface(Typeface.DEFAULT); p.setTextSize(12*u); p.setColor(accent);
-                c.drawText(thai?"ต้องชาร์จ":"Charge required",b.centerX(),b.top+75*u,p);
+                p.setTypeface(Typeface.DEFAULT_BOLD); p.setTextSize(12*u); p.setColor(accent);
+                c.drawText(thai?"ต้องชาร์จ":"Charge required",(l+r)/2,b.top+71*u,p);
             }
         }
         @Override public void setAlpha(int a) { }
