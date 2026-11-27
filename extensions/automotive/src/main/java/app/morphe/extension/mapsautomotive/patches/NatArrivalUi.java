@@ -29,7 +29,7 @@ public final class NatArrivalUi {
     private static final Pattern PERCENT = Pattern.compile("(?<![0-9+−-])([+−-]?[0-9]{1,3}\\s*[%％])");
     private static final Pattern DISTANCE = Pattern.compile("(?iu)[0-9]+(?:[.,][0-9]+)?\\s*(?:กม\\.?|km|mi|เมตร|m\\b)");
     private static final Pattern TIME = Pattern.compile("(?iu)(?:[0-9]{1,2}:[0-9]{2}|[0-9]+\\s*(?:นาที|ชม\\.?|min|hr|hours?))");
-    private static double routeKm(CharSequence text) {
+    static double routeKm(CharSequence text) {
         Matcher m=Pattern.compile("(?iu)([0-9]+(?:[.,][0-9]+)?)\\s*(?:กม\\.?|km)").matcher(text);
         if(!m.find()) return Double.NaN;
         String number=m.group(1);
@@ -113,17 +113,19 @@ public final class NatArrivalUi {
         ReportLog.i("NatArrivalUi", "V3.1 integrated navigation battery hook installed");
         WeakReference<Activity> ref = new WeakReference<>(activity);
         MAIN.postDelayed(new Runnable() {
+            boolean focused;
             @Override public void run() {
                 Activity a = ref.get();
                 if (a == null || a.isDestroyed() || a.isFinishing()) return;
                 try {
                     View root = a.getWindow().peekDecorView();
                     if (root != null && a.hasWindowFocus() && SafeMode.on(a, SafeMode.BYD_BATTERY)) {
+                        if(!focused){focused=true;ColorScheme.refreshOnFocus();}
                         attach(root, a);
                         NatNavigationCard.refresh(root);
                         scan(root, 0);
                         try { NatMinimalEv.refresh(a,root); } catch (RuntimeException ignored) { NatMinimalEv.clear(a); }
-                    } else if (root != null) { NatNavigationCard.clear(root); NatMinimalEv.clear(a); }
+                    } else { focused=false; if(root!=null){NatNavigationCard.clear(root);NatMinimalEv.clear(a);} }
                 } catch (RuntimeException error) {
                     View root = a.getWindow().peekDecorView();
                     if (root != null) NatNavigationCard.clear(root);

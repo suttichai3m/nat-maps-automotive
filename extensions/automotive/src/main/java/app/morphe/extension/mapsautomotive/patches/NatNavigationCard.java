@@ -88,7 +88,7 @@ final class NatNavigationCard {
             && !((TextView)v).isTextSelectable() && v.isShown() && v.getGlobalVisibleRect(new Rect());
     }
     private static void collect(View v,List<TextView> text,int depth) {
-        if(depth>40 || !v.isShown() || !v.getGlobalVisibleRect(new Rect())) return;
+        if(depth>40 || NatMinimalEv.owned(v) || !v.isShown() || !v.getGlobalVisibleRect(new Rect())) return;
         if(visibleText(v)) { if(!NatNavigationSummary.normalize(((TextView)v).getText()).isEmpty()) text.add((TextView)v); }
         else if(v instanceof ViewGroup) {
             ViewGroup g=(ViewGroup)v;
@@ -158,6 +158,8 @@ final class NatNavigationCard {
         return result;
     }
     static boolean hasVerifiedRoute(View root) { List<Match> m=matches(root); return m.size()==1 && m.get(0).panel!=null; }
+    private static final WeakHashMap<View,Long> VERIFIED=new WeakHashMap<>();
+    static boolean recentlyVerified(View root){Long t=VERIFIED.get(root);return t!=null&&android.os.SystemClock.elapsedRealtime()-t<=2000;}
     // Measure the actual rendered text, not the width of a match-parent TextView.
     // Layout selection includes ReplacementSpan/emoji widths. Unknown layout fails closed.
     private static Rect textRange(TextView tv,int start,int end) {
@@ -276,6 +278,7 @@ final class NatNavigationCard {
     static void refresh(View root) {
         if (!root.isShown() || !root.hasWindowFocus() || !SafeMode.on(root.getContext(), SafeMode.BYD_BATTERY)) { clear(root); status(root,"inactive"); return; }
         List<Match> matches=matches(root);
+        if(matches.size()==1&&matches.get(0).panel!=null)VERIFIED.put(root,android.os.SystemClock.elapsedRealtime());else VERIFIED.remove(root);
         if(matches.size()!=1) { clear(root); status(root,matches.isEmpty()?"no verified summary":"ambiguous summaries"); return; }
         Match match=matches.get(0); TextView tv=match.anchor; int soc=match.soc;
         Rect visible=new Rect(), viewport=new Rect(); Point offset=new Point();
@@ -333,12 +336,18 @@ final class NatNavigationCard {
             return;
         }
         syncIcon(c,match,regions[0]);
+        // A next-leg summary must never be silently relabelled as the final destination.
+        double km=NatArrivalUi.routeKm(tv.getText());
+        NatPrediction.Snapshot f=NatPrediction.freshSnapshot();
+        boolean finalKnown=f!=null&&NatStabilityMath.matches(soc,km,f.google,f.km);
+        boolean nextKnown=f!=null&&f.charges>0&&NatStabilityMath.matches(soc,km,f.next,f.nextKm)&&!finalKnown;
+        String label=finalKnown?(thai?"แบตปลายทาง":"Final arrival"):nextKnown?(thai?"แบตถึงจุดถัดไป":"Next stop SOC"):(thai?"แบตเมื่อถึง":"Arrival battery");
         status(root,"visible " + placement + " " + match.kind + " " + chosen + "dp native SOC hidden; separate icon " + (c.icon!=null) + (soc<0?" negative warning retained":""));
-        if(c.soc==soc && c.thai==thai && c.dark==dark && c.getBounds().equals(area)) return;
-        c.soc=soc; c.thai=thai; c.dark=dark; c.setBounds(area); c.invalidateSelf();
+        if(c.soc==soc && c.thai==thai && c.dark==dark && label.equals(c.label) && c.getBounds().equals(area)) return;
+        c.soc=soc; c.thai=thai; c.dark=dark; c.label=label; c.setBounds(area); c.invalidateSelf();
     }
     private static final class Card extends Drawable {
-        int soc; boolean thai,dark; String placement="";
+        int soc; boolean thai,dark; String placement="",label="Arrival battery";
         java.lang.ref.WeakReference<TextView> source;
         HiddenSoc hidden;
         java.lang.ref.WeakReference<View> icon;
@@ -352,7 +361,7 @@ final class NatNavigationCard {
             p.setStyle(Paint.Style.FILL); p.setColor(dark?0xff202c32:0xfff2f6f4);
             c.drawRoundRect(new RectF(b),10*u,10*u,p);
             p.setTextAlign(Paint.Align.CENTER); p.setTypeface(Typeface.DEFAULT); p.setTextSize(11*u); p.setColor(fg);
-            c.drawText(thai?"แบตเมื่อถึง":"Arrival battery",b.centerX(),b.top+13*u,p);
+            c.drawText(label,b.centerX(),b.top+13*u,p);
             float l=b.left+5*u,r=b.right-9*u,t=b.top+18*u,bot=b.top+76*u;
             if(soc>0) {
                 float fill=(r-l-6*u)*NatSignedSoc.bar(soc)/100f;

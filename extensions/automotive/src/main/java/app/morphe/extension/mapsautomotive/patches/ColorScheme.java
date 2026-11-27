@@ -176,7 +176,7 @@ public final class ColorScheme {
                 WeakReference<Controller> current = controller;
                 if (current == null || current.get() != maps) controller = new WeakReference<>(maps);
             }
-            if (Utils.isContextSet()) mapsValue = nightFlag(liveConfiguration().uiMode);
+            if (on() && Utils.isContextSet()) mapsValue = nightFlag(liveConfiguration().uiMode);
             mapsNight = mapsValue;
             watchSystemNight();
             boolean on = on();
@@ -513,6 +513,7 @@ public final class ColorScheme {
      */
     private static int refreshGeneration; // main thread only
 
+    static void refreshOnFocus(){if(on()&&Utils.isContextSet())refresh("activity focus");}
     private static void refresh(String reason) {
         mainHandler().post(() -> refreshAttempt(reason, ++refreshGeneration, 0));
     }

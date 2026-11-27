@@ -89,7 +89,7 @@ final class NatMinimalEv {
     private static boolean ownedSearch(State s){long now=android.os.SystemClock.elapsedRealtime();return s.opened&&s.openedAt>=0&&now-s.openedAt<=120000;}
     private static boolean hideNative(State s,Controls c,boolean explicitOnly){
         View h=unique(c.hide),close=unique(c.close);
-        if(h!=null&&ownedSearch(s)&&c.evEvidence){if(h.performClick()){s.opened=false;report(s,"Native EV hide requested");return true;}}
+        if(h!=null&&c.mapControls){if(h.performClick()){s.opened=false;report(s,"Native EV hide requested");return true;}}
         if(!explicitOnly&&NatMinimalEvRules.allowClose(ownedSearch(s),c.results,c.evEvidence,close!=null)){
             if(close.performClick()){s.opened=false;report(s,"Native close search requested");return true;}
         }
@@ -208,7 +208,7 @@ final class NatMinimalEv {
         State state=STATES.get(a);if(state==null){state=new State();STATES.put(a,state);}
         final State owner=state;
         List<View> views=new ArrayList<>();collect(root,views,0,null);Controls c=inspect(views);
-        boolean route=NatNavigationCard.hasVerifiedRoute(root);
+        boolean route=NatNavigationCard.recentlyVerified(root);
         NatPrediction.Snapshot forecast=NatPrediction.freshSnapshot();boolean fresh=forecast!=null;int stops=fresh?forecast.charges:-1;
         if(NatStabilityMath.autoHide(state.previousFresh,state.previousStops,fresh,stops)){
             state.mode=0;removePanel(state);report(state,"Auto-hide: new forecast or changed charging-stop count");
@@ -227,7 +227,7 @@ final class NatMinimalEv {
             if(bounds.contains(r)&&free(views,r,host)){slot=r;vertical=orientation==0;break;}
         }
         if(slot==null){clear(a);report(state,"Toolbar unavailable: native controls protected");return;}
-        boolean active=ownedSearch(state)&&(c.evEvidence||unique(c.hide)!=null);boolean dark=ColorScheme.nightColors(a);
+        boolean active=unique(c.hide)!=null||(ownedSearch(state)&&c.evEvidence);boolean dark=ColorScheme.nightColors(a);
         android.widget.LinearLayout bar=state.toolbar==null?null:state.toolbar.get();
         if(bar==null||bar.getParent()!=host||state.vertical!=vertical){
             remove(bar);bar=column(a);bar.setOrientation(vertical?1:0);bar.setElevation(dp(a,5));
@@ -237,7 +237,7 @@ final class NatMinimalEv {
         }else if(state.left!=slot.left||state.top!=slot.top)put(host,bar,slot,false);
         state.left=slot.left;state.top=slot.top;
         boolean[] activeKeys={active,state.mode==1,state.mode==2,false};
-        for(int i=0;i<4;i++){TextView t=(TextView)bar.getChildAt(i);int style=(dark?2:0)+(activeKeys[i]?1:0);if(t.getCurrentTextColor()!=(activeKeys[i]||dark?Color.WHITE:0xff263238)||t.isSelected()!=activeKeys[i]||t.getBackground()==null){style(t,activeKeys[i],dark,size/2);t.setSelected(activeKeys[i]);}}
+        for(int i=0;i<4;i++){TextView t=(TextView)bar.getChildAt(i);if(t.getCurrentTextColor()!=(activeKeys[i]||dark?Color.WHITE:0xff263238)||t.isSelected()!=activeKeys[i]||t.getBackground()==null){style(t,activeKeys[i],dark,size/2);t.setSelected(activeKeys[i]);}}
         showPanel(a,host,state,views,bounds,slot,dark,forecast);
     }
 }
