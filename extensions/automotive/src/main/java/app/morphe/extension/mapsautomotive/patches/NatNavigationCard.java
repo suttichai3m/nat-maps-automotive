@@ -20,6 +20,7 @@ final class NatNavigationCard {
         if (c != null) {
             root.getOverlay().remove(c);
             restoreNative(c);
+            restoreIcon(c);
         }
     }
 
@@ -187,6 +188,47 @@ final class NatNavigationCard {
         if(soc==null || (start>0 && prefix==null)) return null;
         return new Rect[]{soc,prefix};
     }
+    private static void restoreIcon(Card c) {
+        View v=c.icon==null?null:c.icon.get();
+        if(v!=null && v.getAlpha()==0f) v.setAlpha(c.iconAlpha);
+        c.icon=null;
+    }
+    // Only an identified, noninteractive arrival-battery icon inside the verified panel.
+    // Never hide arbitrary warning or navigation images based on their size alone.
+    private static void findIcons(View v, Match m, Rect soc, List<View> result, int depth) {
+        if(depth>40 || !v.isShown()) return;
+        if(v instanceof android.widget.ImageView && !v.isClickable() && !v.isLongClickable() && !v.isFocusable()
+                && v.getId()!=View.NO_ID) {
+            try {
+                String name=v.getResources().getResourceEntryName(v.getId()).toLowerCase(java.util.Locale.ROOT);
+                boolean named=name.equals("battery_icon") || name.equals("arrival_battery_icon")
+                    || name.equals("status_panel_battery_icon") || name.equals("battery_level_icon")
+                    || name.equals("arrival_soc_icon");
+                Rect r=new Rect(); float d=v.getResources().getDisplayMetrics().density;
+                if(named && v.getGlobalVisibleRect(r) && r.width()<=48*d && r.height()<=48*d
+                        && Math.abs(r.centerY()-soc.centerY())<=24*d && Math.abs(r.centerX()-soc.centerX())<=96*d)
+                    result.add(v);
+            } catch(android.content.res.Resources.NotFoundException ignored) {}
+        }
+        if(v instanceof ViewGroup) {
+            ViewGroup g=(ViewGroup)v;
+            for(int i=0;i<g.getChildCount();i++) findIcons(g.getChildAt(i),m,soc,result,depth+1);
+        }
+    }
+    private static void syncIcon(Card c,Match m,Rect soc) {
+        List<View> candidates=new ArrayList<>();
+        if(m.panel!=null) findIcons(m.panel,m,soc,candidates,0);
+        View target=candidates.size()==1?candidates.get(0):null;
+        View old=c.icon==null?null:c.icon.get();
+        if(old!=target) restoreIcon(c);
+        if(target!=null) {
+            if(c.icon==null && target.getAlpha()>0f) {
+                c.icon=new java.lang.ref.WeakReference<>(target);
+                c.iconAlpha=target.getAlpha();
+            }
+            if(c.icon!=null && target.getAlpha()!=0f) target.setAlpha(0f);
+        }
+    }
     private static boolean hasDrawable(TextView tv) {
         for(Drawable d:tv.getCompoundDrawables()) if(d!=null) return true;
         return false;
@@ -262,7 +304,7 @@ final class NatNavigationCard {
         boolean dark=ColorScheme.nightColors(tv.getContext());
         Card c=existing;
         if(c==null) { c=new Card(); CARDS.put(root,c); root.getOverlay().add(c); }
-        if(c.source!=null && c.source.get()!=tv) restoreNative(c);
+        if(c.source!=null && c.source.get()!=tv) { restoreNative(c); restoreIcon(c); }
         c.source=new java.lang.ref.WeakReference<>(tv); c.placement=placement;
         // Suppress only a verified suffix once a safe card location is available.
         Matcher suffix=TAIL.matcher(tv.getText().toString().replace('\u00a0',' ').replace('\u202f',' ').replaceAll("[\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]", " "));
@@ -280,7 +322,8 @@ final class NatNavigationCard {
             status(root,"native suffix not hidden; native SOC retained");
             return;
         }
-        status(root,"visible " + placement + " " + match.kind + " " + chosen + "dp native SOC hidden");
+        syncIcon(c,match,regions[0]);
+        status(root,"visible " + placement + " " + match.kind + " " + chosen + "dp native SOC hidden; separate icon " + (c.icon!=null));
         if(c.soc==soc && c.thai==thai && c.dark==dark && c.getBounds().equals(area)) return;
         c.soc=soc; c.thai=thai; c.dark=dark; c.setBounds(area); c.invalidateSelf();
     }
@@ -288,45 +331,41 @@ final class NatNavigationCard {
         int soc; boolean thai,dark; String placement="";
         java.lang.ref.WeakReference<TextView> source;
         HiddenSoc hidden;
+        java.lang.ref.WeakReference<View> icon;
+        float iconAlpha;
         android.text.Spanned original;
         final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
         @Override public void draw(Canvas c) {
             Rect b=getBounds(); float u=b.width()/160f;
             int fg=dark?0xfff5f5f5:0xff263238;
-            int accent=soc<20?0xffdc4040:soc<35?0xffd97706:0xff179b64;
-            p.setStyle(Paint.Style.FILL); p.setColor(dark?0xff172b30:0xfff3f8f6);
-            c.drawRoundRect(new RectF(b),12*u,12*u,p);
-            p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1.2f*u);
-            p.setColor(dark?0xff43645d:0xffc3d8d1);
-            c.drawRoundRect(new RectF(b.left+u,b.top+u,b.right-u,b.bottom-u),11*u,11*u,p);
-            p.setStyle(Paint.Style.FILL);
-            p.setTextAlign(Paint.Align.LEFT); p.setTypeface(Typeface.DEFAULT); p.setTextSize(12*u); p.setColor(fg);
-            c.drawText(thai?"แบตเมื่อถึง":"Arrival battery",b.left+10*u,b.top+16*u,p);
-            p.setColor(soc<0?(dark?0xffff8888:0xffb91c1c):fg);
-            p.setTypeface(Typeface.DEFAULT_BOLD); p.setTextSize((soc<0?36:40)*u);
-            String number=soc+"%";
-            float max=b.width()-58*u;
-            if(p.measureText(number)>max) p.setTextSize(p.getTextSize()*max/p.measureText(number));
-            c.drawText(number,b.left+10*u,b.top+(soc<0?47:53)*u,p);
-            // Large battery pictogram to the right of the number, including negative SOC.
-            float il=b.right-43*u, it=b.top+27*u, ir=b.right-10*u, ib=b.top+47*u;
-            p.setColor(accent); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(2*u);
-            c.drawRoundRect(il,it,ir-3*u,ib,4*u,4*u,p);
-            p.setStyle(Paint.Style.FILL);
-            c.drawRoundRect(ir-2*u,it+6*u,ir,ib-6*u,u,u,p);
-            if(soc>0) c.drawRoundRect(il+3*u,it+3*u,il+3*u+(ir-il-9*u)*NatSignedSoc.bar(soc)/100f,ib-3*u,2*u,2*u,p);
-            if(soc<0) {
-                p.setTypeface(Typeface.DEFAULT); p.setTextSize(12*u);
-                p.setColor(dark?0xffff8888:0xffb91c1c);
-                c.drawText(thai?"ต้องชาร์จ":"Charge required",b.left+10*u,b.top+69*u,p);
-                return;
+            int accent=soc<20?(dark?0xffff8585:0xffb91c1c):soc<35?(dark?0xffffbd66:0xffa65308):(dark?0xff74dba8:0xff137548);
+            p.setStyle(Paint.Style.FILL); p.setColor(dark?0xff202c32:0xfff2f6f4);
+            c.drawRoundRect(new RectF(b),10*u,10*u,p);
+            p.setTextAlign(Paint.Align.CENTER); p.setTypeface(Typeface.DEFAULT); p.setTextSize(11*u); p.setColor(fg);
+            c.drawText(thai?"แบตเมื่อถึงปลายทาง":"Arrival battery",b.centerX(),b.top+13*u,p);
+            float l=b.left+5*u,r=b.right-9*u,t=b.top+18*u,bot=b.top+(soc<0?60:76)*u;
+            if(soc>0) {
+                float fill=(r-l-6*u)*NatSignedSoc.bar(soc)/100f;
+                int save=c.save();
+                Path clip=new Path(); clip.addRoundRect(new RectF(l+3*u,t+3*u,r-3*u,bot-3*u),5*u,5*u,Path.Direction.CW);
+                c.clipPath(clip);
+                p.setColor(soc<20?(dark?0xff552d32:0xfff9d4d4):soc<35?(dark?0xff513e25:0xffffe4bb):(dark?0xff214e3d:0xffc7ecd7));
+                c.drawRect(l+3*u,t+3*u,l+3*u+fill,bot-3*u,p); c.restoreToCount(save);
             }
-            float l=b.left+10*u,r=b.right-15*u,t=b.bottom-15*u,bot=b.bottom-7*u;
-            p.setColor(dark?0xff485461:0xffb9cbd4); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1.2f*u);
-            c.drawRoundRect(l,t,r,bot,2*u,2*u,p);
-            p.setStyle(Paint.Style.FILL); c.drawRoundRect(r+2*u,t+2*u,r+5*u,bot-2*u,u,u,p);
-            int fill=NatSignedSoc.bar(soc); p.setColor(accent);
-            if(fill>0) c.drawRoundRect(l+2*u,t+2*u,l+2*u+(r-l-4*u)*fill/100f,bot-2*u,u,u,p);
+            p.setColor(accent); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(2*u);
+            c.drawRoundRect(l,t,r,bot,8*u,8*u,p);
+            p.setStyle(Paint.Style.FILL);
+            c.drawRoundRect(r+u,(t+bot)/2-9*u,r+5*u,(t+bot)/2+9*u,2*u,2*u,p);
+            p.setTypeface(Typeface.DEFAULT_BOLD); p.setTextSize((soc<0?32:40)*u);
+            String number=soc+"%";
+            float max=r-l-12*u;
+            if(p.measureText(number)>max) p.setTextSize(p.getTextSize()*max/p.measureText(number));
+            p.setColor(soc<0?accent:fg);
+            c.drawText(number,(l+r)/2,(t+bot)/2-(p.ascent()+p.descent())/2,p);
+            if(soc<0) {
+                p.setTypeface(Typeface.DEFAULT); p.setTextSize(12*u); p.setColor(accent);
+                c.drawText(thai?"ต้องชาร์จ":"Charge required",b.centerX(),b.top+75*u,p);
+            }
         }
         @Override public void setAlpha(int a) { }
         @Override public void setColorFilter(ColorFilter f) { }

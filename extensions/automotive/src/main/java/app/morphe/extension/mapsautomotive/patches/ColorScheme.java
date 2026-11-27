@@ -176,6 +176,7 @@ public final class ColorScheme {
                 WeakReference<Controller> current = controller;
                 if (current == null || current.get() != maps) controller = new WeakReference<>(maps);
             }
+            if (Utils.isContextSet()) mapsValue = nightFlag(liveConfiguration().uiMode);
             mapsNight = mapsValue;
             watchSystemNight();
             boolean on = on();
@@ -528,7 +529,13 @@ public final class ColorScheme {
                     if (attempt < 3) mainHandler().postDelayed(() -> refreshAttempt(reason, generation, attempt + 1), 500L << attempt);
                     return;
                 }
-                if (maps.morpheRefreshNight(liveConfiguration())) {
+                Configuration config = new Configuration(liveConfiguration());
+                if (on()) {
+                    boolean target = nightColors(application());
+                    config.uiMode = (config.uiMode & ~Configuration.UI_MODE_NIGHT_MASK)
+                        | (target ? Configuration.UI_MODE_NIGHT_YES : Configuration.UI_MODE_NIGHT_NO);
+                }
+                if (maps.morpheRefreshNight(config)) {
                     ReportLog.i(TAG, "Maps' screens refreshed for " + (Boolean.TRUE.equals(givenNight) ? "night" : "day")
                             + " colors (" + reason + ")");
                     // The refresh binds a Settings row again with the subtitle it was built with.
@@ -639,9 +646,7 @@ public final class ColorScheme {
     // The choice and the switch.
 
     private static boolean on() {
-        Boolean value = switchOn;
-        if (value != null) return value;
-        if (!Utils.isContextSet()) return false;
+        if (!Utils.isContextSet()) return Boolean.TRUE.equals(switchOn);
         boolean on = SafeMode.on(SafeMode.COLOR_SCHEME);
         switchOn = on;
         return on;
