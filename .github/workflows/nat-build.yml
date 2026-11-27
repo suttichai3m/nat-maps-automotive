@@ -28,6 +28,10 @@ jobs:
         run: bash scripts/test-battery-placement.sh
       - name: Integrated battery tests
         run: bash scripts/test-integrated-battery.sh
+      - name: V3.3 daily energy tests
+        run: bash scripts/test-nat-v33.sh
+      - name: V3.4 Smart EV math tests
+        run: bash scripts/test-nat-v34.sh
       - name: Build patch
         env:
           GITHUB_ACTOR: ${{ github.actor }}

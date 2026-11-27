@@ -3003,6 +3003,13 @@ public final class BydBatteryPatch {
      * The battery health and temperatures as read (raw) and as shown; null before the reader started (it starts
      * with the BYD SDK's battery reader, so never on DiLink 5).
      */
+    // Cached read-only health data for Smart EV; no SDK calls on the UI thread.
+    static JSONObject natHealthSnapshot() throws JSONException {
+        if(!active)return null;
+        Object result=healthReport(SystemClock.elapsedRealtime());
+        return result instanceof JSONObject?(JSONObject)result:null;
+    }
+
     private static Object healthReport(long now) throws JSONException {
         String status = healthStatus;
         if (status == null) return JSONObject.NULL;

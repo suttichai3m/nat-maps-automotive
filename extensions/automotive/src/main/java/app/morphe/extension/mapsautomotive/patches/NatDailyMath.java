@@ -10,6 +10,13 @@ final class NatDailyMath {
   double delta=((long)oldWh-wh)/1000.0;
   return Math.abs(delta*3600000/dt)<=250?delta:Double.NaN;
  }
+ // Minimum stored energy to reach a selected reserve, ignoring charge losses.
+ static double reserveEnergy(double capacity,double arrival,double reserve){
+  if(!Double.isFinite(capacity)||capacity<=0||capacity>150||!Double.isFinite(arrival)||arrival>100||!Double.isFinite(reserve)||reserve<0||reserve>100)return Double.NaN;
+  return capacity*Math.max(0,reserve-arrival)/100;
+ }
+ static double chargeMinutes(double kwh,double kw){return Double.isFinite(kwh)&&kwh>=0&&Double.isFinite(kw)&&kw>0&&kw<=350?kwh*60/kw:Double.NaN;}
+ static double perKm(double cost,double coveredKm){return Double.isFinite(cost)&&cost>=0&&Double.isFinite(coveredKm)&&coveredKm>0?cost/coveredKm:Double.NaN;}
  static boolean moving(double s){return Double.isFinite(s)&&s>1&&s<=250;}
  static double forecastRate(double energy,double km){return Double.isFinite(energy)&&energy>=0&&Double.isFinite(km)&&km>0?energy*100/km:Double.NaN;}
 }

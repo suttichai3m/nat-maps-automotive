@@ -201,7 +201,7 @@ final class NatSplitScreen {
  private static void build(Activity a,State s,int width,int mapH,int footerH){
   s.dark=ColorScheme.nightColors(a);
   LinearLayout panel=vertical(a);panel.setTag(OWN);panel.setBackgroundColor(surface(s));panel.setPadding(dp(a,6),dp(a,5),dp(a,6),dp(a,4));s.panel=panel;
-  add(panel,text(a,"BYD SEAL  •  NAT V3.3",14,fg(s),true),dp(a,24));
+  add(panel,text(a,"BYD SEAL  •  NAT V3.4",14,fg(s),true),dp(a,24));
   s.hero=new ImageView(a);s.hero.setScaleType(ImageView.ScaleType.FIT_CENTER);
   s.hero.setContentDescription("BYD Seal blue, static studio image");s.hero.setImageBitmap(NatSealHero.bitmap());
   s.hero.setBackground(bg(a,0xff071522,0,8));s.hero.setClipToOutline(true);
@@ -232,6 +232,7 @@ final class NatSplitScreen {
   LinearLayout m4=row(a);add(body,m4,metricsH);s.gps=metric(a,s,m4,"GPS",fg(s),false,false);s.byd=metric(a,s,m4,"ข้อมูล BYD",fg(s),false,false);
   s.host.addView(panel,new FrameLayout.LayoutParams(width,mapH,Gravity.RIGHT|Gravity.TOP));
   LinearLayout footer=row(a);footer.setTag(OWN);footer.setBackgroundColor(surface(s));footer.setPadding(dp(a,3),0,dp(a,3),0);s.footer=footer;
+  action(a,s,footer,"Smart EV",6,()->NatSmartEvMenu.show(a));
   action(a,s,footer,"EV Charging",0,()->NatMinimalEv.splitAction(a,0));
   action(a,s,footer,"Energy",1,()->NatMinimalEv.splitAction(a,1));
   action(a,s,footer,"Charging Plan",2,()->NatMinimalEv.splitAction(a,2));
@@ -341,6 +342,7 @@ final class NatSplitScreen {
     case 2:for(int y=-8;y<=8;y+=8){c.drawCircle(-9,y,1,p);c.drawLine(-4,y,10,y,p);}break;
     case 3:c.drawCircle(0,0,10,p);c.drawLine(-7,7,7,-7,p);break;
     case 4:c.drawCircle(0,0,11,p);c.drawCircle(0,-5,1,p);c.drawLine(0,-1,0,6,p);break;
+    case 6:c.drawRoundRect(-11,-10,11,10,3,3,p);path.moveTo(2,-8);path.lineTo(-5,1);path.lineTo(0,1);path.lineTo(-2,8);path.lineTo(5,-1);path.lineTo(0,-1);path.close();c.drawPath(path,p);break;
     default:c.drawRoundRect(-11,-9,11,9,2,2,p);c.drawLine(3,-9,3,9,p);
    }c.restore();}
   public void setAlpha(int a){}public void setColorFilter(ColorFilter f){}public int getOpacity(){return PixelFormat.TRANSLUCENT;}
