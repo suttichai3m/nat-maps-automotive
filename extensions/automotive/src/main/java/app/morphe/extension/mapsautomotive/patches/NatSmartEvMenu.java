@@ -128,7 +128,9 @@ final class NatSmartEvMenu {
   };
   calc.run();action("คำนวณ / บันทึกเป้าหมาย",calc);
   line("ค่าประมาณ ณ เวลาเปิด • ไม่รวมการสูญเสียและช่วงลดกำลังชาร์จ • ไม่ยืนยันว่ามีสถานีว่าง");
-  action("ค้นหาสถานีชาร์จ (Maps)",()->closeThen(()->NatMinimalEv.splitAction(a,0)));
+  line(NatMinimalEv.layerStatus(a));
+  action("EV Charging Live Map • Native toggle",()->closeThen(()->NatMinimalEv.splitAction(a,0)));
+  action("ค้นหาสถานีชาร์จ (Maps) • ทางเลือกเดิม",()->closeThen(()->NatMinimalEv.splitAction(a,5)));
   action("แผนการชาร์จเดิม",()->closeThen(()->NatMinimalEv.splitAction(a,2)));
   action("‹ กลับเมนู",this::home);
  }

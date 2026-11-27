@@ -38,6 +38,8 @@ jobs:
         run: bash scripts/test-nat-v36.sh
       - name: Favorite destination validation tests
         run: bash scripts/test-nat-favorites.sh
+      - name: EV live layer selection tests
+        run: bash scripts/test-nat-ev-layer.sh
       - name: Build patch
         env:
           GITHUB_ACTOR: ${{ github.actor }}

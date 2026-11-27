@@ -49,7 +49,7 @@ final class NatSplitScreen {
  private static int dp(Context c,int n){return Math.round(n*c.getResources().getDisplayMetrics().density);}
  private static final class State {
   FrameLayout host;View nativeView;FrameLayout.LayoutParams original,applied;
-  LinearLayout panel,footer,detailsBody;TextView soc,arrival,arrivalLabel,speed,power,remaining,rate,distance,eta,gps,byd,heading;
+  LinearLayout panel,footer,detailsBody;Button evButton;TextView soc,arrival,arrivalLabel,speed,power,remaining,rate,distance,eta,gps,byd,heading;
   ImageView hero;TextView range,odo,acDriver,acPassenger,todayKm,todayEnergy,tariff,todayCost,dayNote,outside,battTemp,soh,tyresFront,tyresRear;LocationManager lm;LocationListener listener;
   WeakReference<View> blocked;int blockedW,blockedH;
   long bearingAt=-1,fixAt=-1,started,lastEvidence=-1,retryAt;
@@ -80,7 +80,7 @@ final class NatSplitScreen {
  }
  private static void removeUi(State s){
   NatV33Telemetry.stop();
-  remove(s.panel);remove(s.footer);s.panel=s.footer=s.detailsBody=null;s.hero=null;
+  remove(s.panel);remove(s.footer);s.panel=s.footer=s.detailsBody=null;s.hero=null;s.evButton=null;
   s.range=s.odo=s.acDriver=s.acPassenger=s.todayKm=s.todayEnergy=s.tariff=s.todayCost=s.dayNote=s.outside=s.battTemp=s.soh=s.tyresFront=s.tyresRear=null;
   s.soc=s.arrival=s.arrivalLabel=s.speed=s.power=s.remaining=s.rate=s.distance=s.eta=s.gps=s.byd=s.heading=null;
  }
@@ -189,7 +189,7 @@ final class NatSplitScreen {
   TextView value=text(a,"—",battery?30:17,accent,true);value.setSingleLine(true);value.setAutoSizeTextTypeUniformWithConfiguration(battery?24:12,battery?34:19,1,android.util.TypedValue.COMPLEX_UNIT_SP);
   add(cell,value,-2);if(arrival)s.arrivalLabel=label;return value;
  }
- private static void action(Activity a,State s,LinearLayout parent,String name,int symbol,Runnable callback){
+ private static Button action(Activity a,State s,LinearLayout parent,String name,int symbol,Runnable callback){
   Button b=new Button(a);b.setText(name);b.setAllCaps(false);b.setTextSize(13);b.setTextColor(fg(s));b.setGravity(Gravity.CENTER);b.setMinHeight(dp(a,48));b.setMinimumHeight(dp(a,48));
   b.setPadding(dp(a,4),0,dp(a,4),0);b.setSingleLine(true);b.setAutoSizeTextTypeUniformWithConfiguration(10,14,1,android.util.TypedValue.COMPLEX_UNIT_SP);
   b.setBackground(new android.graphics.drawable.RippleDrawable(ColorStateList.valueOf(s.dark?0x33ffffff:0x22000000),bg(a,card(s),0,8),null));
@@ -197,6 +197,7 @@ final class NatSplitScreen {
   b.setContentDescription(name);b.setTooltipText(name);
   LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-1,1);lp.setMargins(dp(a,3),dp(a,3),dp(a,3),dp(a,3));parent.addView(b,lp);
   b.setOnClickListener(v->{try{callback.run();}catch(RuntimeException e){ReportLog.w("NatSplitScreen","Action unavailable: "+name,e);Toast.makeText(a,"NAT action unavailable",Toast.LENGTH_SHORT).show();}});
+  return b;
  }
  private static void build(Activity a,State s,int width,int mapH,int footerH){
   s.dark=ColorScheme.nightColors(a);
@@ -238,7 +239,7 @@ final class NatSplitScreen {
   LinearLayout footer=row(a);footer.setTag(OWN);footer.setBackgroundColor(surface(s));footer.setPadding(dp(a,3),0,dp(a,3),0);s.footer=footer;
   action(a,s,footer,"Snow AI",8,()->NatV36Shortcuts.snow(a));
   action(a,s,footer,"Smart EV",6,()->NatSmartEvMenu.show(a));
-  action(a,s,footer,"EV Charging",0,()->NatMinimalEv.splitAction(a,0));
+  s.evButton=action(a,s,footer,"EV Charging",0,()->NatMinimalEv.splitAction(a,0));
   action(a,s,footer,"Control",7,()->NatV36Shortcuts.control(a));
   action(a,s,footer,"Charging Plan",2,()->NatMinimalEv.splitAction(a,2));
   action(a,s,footer,"Clean",3,()->NatMinimalEv.splitAction(a,3));
@@ -281,7 +282,7 @@ final class NatSplitScreen {
  private static void set(TextView v,String value){if(!value.contentEquals(v.getText()))v.setText(value);}
  // Called after the native summary has been refreshed in this same UI tick.
  static void refreshDashboard(Activity a,View root){
-  State s=states.get(a);if(s!=null&&active(a)&&a.hasWindowFocus())update(a,s,root);
+  State s=states.get(a);if(s!=null&&active(a)&&a.hasWindowFocus()){if(s.evButton!=null){String label=NatMinimalEv.layerButtonLabel(a);if(!label.contentEquals(s.evButton.getText())){s.evButton.setText(label);s.evButton.setContentDescription(label);}}update(a,s,root);}
  }
  private static void editTariff(Activity a,State s){
   if(!active(a))return;
