@@ -161,6 +161,11 @@ final class NatNavigationCard {
     private static final WeakHashMap<View,Long> VERIFIED=new WeakHashMap<>();
     private static final WeakHashMap<View,double[]> ROUTES=new WeakHashMap<>();
     static boolean recentlyVerified(View root){Long t=VERIFIED.get(root);long now=android.os.SystemClock.elapsedRealtime();return root.hasWindowFocus()&&t!=null&&now>=t&&now-t<=2000;}
+    static double verifiedKm(View root){double[] m=ROUTES.get(root);return m!=null&&recentlyVerified(root)?m[1]:Double.NaN;}
+    private static final WeakHashMap<View,String> ETAS=new WeakHashMap<>();
+    static String verifiedEta(View root){return recentlyVerified(root)?ETAS.get(root):null;}
+    private static String matchEta(Match m){java.util.regex.Pattern p=java.util.regex.Pattern.compile("(?<![0-9])(?:[01]?[0-9]|2[0-3]):[0-5][0-9](?:\\s*(?:AM|PM|น\\.?))?",java.util.regex.Pattern.CASE_INSENSITIVE);java.util.List<TextView> all=new ArrayList<>();if(m.panel!=null)collect(m.panel,all,0);else all.add(m.anchor);String found=null;for(TextView t:all){java.util.regex.Matcher q=p.matcher(NatNavigationSummary.normalize(t.getText()));while(q.find()){String v=q.group();if(found!=null&&!found.equals(v))return null;found=v;}}return found;}
+    static Integer verifiedSoc(View root){double[] m=ROUTES.get(root);return m!=null&&recentlyVerified(root)?(int)m[0]:null;}
     static boolean matchesForecast(View root,NatPrediction.Snapshot f){
         double[] m=ROUTES.get(root);if(f==null||m==null||!recentlyVerified(root))return false;
         return NatStabilityMath.matches((int)m[0],m[1],f.google,f.km)||(f.charges>0&&NatStabilityMath.matches((int)m[0],m[1],f.next,f.nextKm));
@@ -290,7 +295,10 @@ final class NatNavigationCard {
     static void refresh(View root) {
         if (!root.isShown() || !root.hasWindowFocus() || !SafeMode.on(root.getContext(), SafeMode.BYD_BATTERY)) { clear(root); status(root,"inactive"); return; }
         List<Match> matches=matches(root);
-        if(matches.size()==1&&matches.get(0).panel!=null){VERIFIED.put(root,android.os.SystemClock.elapsedRealtime());ROUTES.put(root,new double[]{matches.get(0).soc,matchKm(matches.get(0))});}else{VERIFIED.remove(root);ROUTES.remove(root);}
+        if(matches.size()==1&&matches.get(0).panel!=null){VERIFIED.put(root,android.os.SystemClock.elapsedRealtime());ROUTES.put(root,new double[]{matches.get(0).soc,matchKm(matches.get(0))});ETAS.put(root,matchEta(matches.get(0)));}else{VERIFIED.remove(root);ROUTES.remove(root);ETAS.remove(root);}
+        if(NatMinimalEv.enabled(root.getContext())){
+            clear(root);status(root,"Persistent independent SOC mode; native summary retained");return;
+        }
         if(matches.size()!=1) { clear(root); status(root,matches.isEmpty()?"no verified summary":"ambiguous summaries"); return; }
         Match match=matches.get(0); TextView tv=match.anchor; int soc=match.soc;
         Rect visible=new Rect(), viewport=new Rect(); Point offset=new Point();

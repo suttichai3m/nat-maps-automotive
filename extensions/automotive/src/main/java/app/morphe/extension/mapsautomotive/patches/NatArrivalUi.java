@@ -29,13 +29,7 @@ public final class NatArrivalUi {
     private static final Pattern PERCENT = Pattern.compile("(?<![0-9+−-])([+−-]?[0-9]{1,3}\\s*[%％])");
     private static final Pattern DISTANCE = Pattern.compile("(?iu)[0-9]+(?:[.,][0-9]+)?\\s*(?:กม\\.?|km|mi|เมตร|m\\b)");
     private static final Pattern TIME = Pattern.compile("(?iu)(?:[0-9]{1,2}:[0-9]{2}|[0-9]+\\s*(?:นาที|ชม\\.?|min|hr|hours?))");
-    static double routeKm(CharSequence text) {
-        Matcher m=Pattern.compile("(?iu)([0-9]+(?:[.,][0-9]+)?)\\s*(?:กม\\.?|km)").matcher(text);
-        if(!m.find()) return Double.NaN;
-        String number=m.group(1);
-        if(m.find()) return Double.NaN;
-        try { return Double.parseDouble(number.replace(',','.')); } catch(NumberFormatException e) { return Double.NaN; }
-    }
+    static double routeKm(CharSequence text) {return NatNavigationSummary.routeKm(text);}
     private static boolean routeSummary(CharSequence text) {
         return DISTANCE.matcher(text).find() && TIME.matcher(text).find();
     }
@@ -209,7 +203,17 @@ public final class NatArrivalUi {
                 return;
             }
             boolean navigation = NatNavigationCard.isNavigationSource(tv) || NatNavigationSummary.parseLegacy(text) != null;
-            if (navigation) watch(tv);
+            if (navigation) {
+                watch(tv);
+                if(NatMinimalEv.enabled(tv.getContext())){
+                    if(text instanceof Spanned&&((Spanned)text).getSpans(0,text.length(),NatSize.class).length>0){
+                        SpannableString nativeText=new SpannableString(text);
+                        for(NatSize span:nativeText.getSpans(0,nativeText.length(),NatSize.class))nativeText.removeSpan(span);
+                        tv.setText(nativeText);
+                    }
+                    return;
+                }
+            }
             Matcher m = ARRIVAL.matcher(text);
             if (!m.matches()) {
                 m = PERCENT.matcher(text);

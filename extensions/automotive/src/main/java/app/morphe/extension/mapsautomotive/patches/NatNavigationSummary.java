@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
 /** Only distance + ETA + one arrival SOC; bare percentages are not navigation summaries. */
 final class NatNavigationSummary {
     private static final String SEP = "(?:\\s*[·•・|]\\s*|\\s+)";
-    private static final String DIST = "[0-9]+(?:[.,][0-9]+)?\\s*(?:กม\\.?|km|mi|เมตร|m)";
+    private static final String DIST = "[0-9]+(?:[.,][0-9]+)?\\s*(?:กม\\.?|km|mi|เมตร|ม\\.?|m)";
     private static final String ETA = "(?:(?:ถึง|Arrive at|Arrival at|ETA)\\s*)?(?:[01]?[0-9]|2[0-3]):[0-5][0-9](?:\\s*(?:น\\.?|AM|PM))?";
     private static final String DURATION = "[0-9]+\\s*(?:ชม\\.?|h|hr|hours?)(?:\\s*[0-9]+\\s*(?:นาที|min|minutes?))?|[0-9]+\\s*(?:นาที|min|minutes?)";
     private static final String LABEL = "(?:Arrival battery|Arrive with|Battery on arrival|แบตเมื่อถึง(?:ปลายทาง)?|แบตเตอรี่เมื่อถึง(?:ปลายทาง)?|ไปถึงโดยเหลือ)";
@@ -27,6 +27,13 @@ final class NatNavigationSummary {
     static Integer parseLegacy(CharSequence text) {
         Matcher m=LEGACY.matcher(normalize(text));
         return m.matches()?NatSignedSoc.parse(m.group(1)):null;
+    }
+    private static final Pattern KM=Pattern.compile("(?iu)(?<![0-9.,])([0-9]+(?:[.,][0-9]+)?)\\s*(กม\\.?|km|mi|เมตร|ม\\.?|m)(?![\\p{L}])");
+    static double routeKm(CharSequence text){
+        Matcher m=KM.matcher(normalize(text));if(!m.find())return Double.NaN;
+        String n=m.group(1),unit=m.group(2).toLowerCase(java.util.Locale.ROOT);
+        if(m.find())return Double.NaN;
+        try{double d=Double.parseDouble(n.replace(',','.'));return unit.equals("m")||unit.equals("ม")||unit.equals("ม.")||unit.equals("เมตร")?d/1000:unit.equals("mi")?d*1.609344:d;}catch(NumberFormatException e){return Double.NaN;}
     }
     static Integer parse(CharSequence text) {
         Matcher m = NAV.matcher(normalize(text));

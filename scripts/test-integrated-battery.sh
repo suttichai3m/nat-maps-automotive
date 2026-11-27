@@ -293,6 +293,49 @@ JAVA
 javac --release 17 -encoding UTF-8 -d "$D" "$P/NatToolbarLayout.java" "$D/TestNatToolbar.java"
 java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatToolbar
 
+cat > "$D/TestNatPersistent.java" <<'JAVA'
+package app.morphe.extension.mapsautomotive.patches;
+class TestNatPersistent {
+ static int n;static void check(boolean b){if(!b)throw new AssertionError("Persistent case "+(n+1));n++;}
+ public static void main(String[] args){
+  check(Integer.valueOf(88).equals(NatNavigationSummary.parse("600 ม. · 19:17 น. · 88%")));
+  check(Integer.valueOf(88).equals(NatNavigationSummary.parse("600 ม. · 19:17 น. · 88% 🔋")));
+  check(Integer.valueOf(-8).equals(NatNavigationSummary.parse("500 ม. · 19:17 น. · -8%")));
+  check(Integer.valueOf(88).equals(NatNavigationSummary.parsePanelParts(java.util.Arrays.asList("8 นาที","600 ม. · 19:17 น.","88%"))));
+  check(NatNavigationSummary.parse("600 ม. · 19:17 น. · 88% · 89%")==null);
+  check(NatNavigationSummary.parse("600 ม. · 88%")==null);
+  check(NatNavigationSummary.parse("88%")==null);
+  check(Math.abs(NatNavigationSummary.routeKm("600 ม. · 19:17 น. · 88%")-.6)<1e-9);
+  check(Math.abs(NatNavigationSummary.routeKm("500 เมตร")-.5)<1e-9);
+  check(Math.abs(NatNavigationSummary.routeKm("600 m")-.6)<1e-9);
+  check(Math.abs(NatNavigationSummary.routeKm("19 กม.")-19)<1e-9);
+  check(Math.abs(NatNavigationSummary.routeKm("1.2 km")-1.2)<1e-9);
+  check(Math.abs(NatNavigationSummary.routeKm("1 mi")-1.609344)<1e-9);
+  check(Double.isNaN(NatNavigationSummary.routeKm("8 min")));
+  check(Double.isNaN(NatNavigationSummary.routeKm("600 ม. · 1 กม.")));
+  check("—".equals(NatPersistentLayout.soc(null)));
+  check("-8%".equals(NatPersistentLayout.soc(-8)));
+  var c=NatPersistentLayout.battery(0,0,900,490,164,78,12,true,q->true);
+  check(c.x==12&&c.y==12&&c.w==164&&c.h==78);
+  var a=NatPersistentLayout.battery(0,0,900,490,198,94,12,false,q->!NatPersistentLayout.intersects(c,q));
+  check(a.x==690&&a.w==198&&a.h==94&&!NatPersistentLayout.intersects(c,a));
+  check(NatPersistentLayout.battery(0,0,100,90,164,78,12,true,q->true)==null);
+  check(NatPersistentLayout.battery(0,0,900,490,164,78,12,true,q->false)==null);
+  check(NatPersistentLayout.battery(0,0,900,490,164,78,12,true,q->q.x>500).x>500);
+  var bar=NatPersistentLayout.toolbar(0,0,900,490,48,7,12,false,q->!NatPersistentLayout.intersects(c,q)&&!NatPersistentLayout.intersects(a,q));
+  check(bar.count==5&&!NatPersistentLayout.intersects(c,bar)&&!NatPersistentLayout.intersects(a,bar));
+  check(NatPersistentLayout.toolbar(0,0,900,490,48,7,12,true,q->true).count==1);
+  check(NatPersistentLayout.toolbar(0,0,900,490,48,7,12,false,q->q.count==1).count==1);
+  check(NatPersistentLayout.toolbar(0,0,900,490,48,7,12,false,q->false)==null);
+  check(!NatPersistentLayout.intersects(c,null));
+  check(NatPersistentLayout.intersects(c,c));
+  System.out.println("PASS: "+n+" NAT V2.0.5 persistent UI cases");
+ }
+}
+JAVA
+javac --release 17 -encoding UTF-8 -d "$D" "$P/NatSignedSoc.java" "$P/NatNavigationSummary.java" "$P/NatToolbarLayout.java" "$P/NatPersistentLayout.java" "$D/TestNatPersistent.java"
+java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatPersistent
+
 cat > "$D/TestNatSplit.java" <<'JAVA'
 package app.morphe.extension.mapsautomotive.patches;
 class TestNatSplit {
@@ -326,6 +369,42 @@ class TestNatSplit {
   check(Double.isNaN(NatSplitMath.turn(90,100,30,5001)));
   check(Double.isNaN(NatSplitMath.turn(Double.NaN,100,30,1000)));
   check(Double.isNaN(NatSplitMath.turn(360,100,30,1000)));
+  check(NatSplitMath.viewportHeight(480,56,260)==424);
+  check(NatSplitMath.viewportHeight(316,56,260)==260);
+  check(NatSplitMath.viewportHeight(315,56,260)==0);
+  check(NatSplitMath.viewportHeight(480,0,260)==0);
+  check(NatSplitMath.viewportHeight(-1,56,260)==0);
+  check(NatSplitMath.geometry(600,424,600,424,2));
+  check(NatSplitMath.geometry(598,426,600,424,2));
+  check(!NatSplitMath.geometry(603,424,600,424,2));
+  check(!NatSplitMath.geometry(600,427,600,424,2));
+  check(!NatSplitMath.geometry(0,424,600,424,2));
+  check(!NatSplitMath.geometry(600,424,0,424,2));
+  check(!NatSplitMath.geometry(600,424,600,424,-1));
+  check(Integer.valueOf(89).equals(NatSplitMath.current(89.1)));
+  check(Integer.valueOf(0).equals(NatSplitMath.current(0)));
+  check(Integer.valueOf(100).equals(NatSplitMath.current(100)));
+  check(NatSplitMath.current(100.1)==null);
+  check(NatSplitMath.current(-1)==null);
+  check(NatSplitMath.current(Double.NaN)==null);
+  check(Integer.valueOf(88).equals(NatSplitMath.arrival(true,88,89)));
+  check(Integer.valueOf(-31).equals(NatSplitMath.arrival(true,-31,5)));
+  check(Integer.valueOf(88).equals(NatSplitMath.arrival(false,40,88)));
+  check(Integer.valueOf(88).equals(NatSplitMath.arrival(true,null,88)));
+  check(NatSplitMath.arrival(false,88,null)==null);
+  check(NatSplitMath.arrival(true,101,101)==null);
+  check(NatSplitMath.arrival(true,-1000,null)==null);
+  check("—".equals(NatSplitMath.percent(null)));
+  check("-31%".equals(NatSplitMath.percent(-31)));
+  check(NatSplitMath.keepViewport(true,100000,-1));
+  check(NatSplitMath.keepViewport(false,6000,1000));
+  check(!NatSplitMath.keepViewport(false,6001,1000));
+  check(!NatSplitMath.keepViewport(false,1000,1001));
+  check(!NatSplitMath.keepViewport(false,1000,-1));
+  check(NatSplitMath.moving(42));
+  check(!NatSplitMath.moving(0));
+  check(!NatSplitMath.moving(Double.NaN));
+  check(!NatSplitMath.moving(251));
   System.out.println("PASS: "+n+" NAT V3.0 split and motion cases");
  }
 }
