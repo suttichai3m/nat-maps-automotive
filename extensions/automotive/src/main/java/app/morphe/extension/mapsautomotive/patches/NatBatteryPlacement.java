@@ -51,7 +51,7 @@ final class NatBatteryPlacement {
         return out;
     }
     // Fixed right edge, aligned with the summary SOC row. No floating positions.
-    static List<Box> rightCell(Box panel, Box soc, int w, int h, int gap) {
+    static List<Box> rightCell(Box panel, Box soc, Box protectedPrefix, int w, int h, int gap) {
         List<Box> out = new ArrayList<>();
         if (w <= 0 || h <= 0 || w > panel.w || h > panel.h) return out;
         int x = panel.x + panel.w - w - Math.min(gap, panel.w - w);
@@ -60,6 +60,7 @@ final class NatBatteryPlacement {
         unique(out, panel, x, y, w, h);
         unique(out, panel, x, panel.y, w, h);
         unique(out, panel, x, clamp(soc.y + soc.h - h, panel.y, bottom), w, h);
+        if (protectedPrefix != null) out.removeIf(b -> b.overlaps(protectedPrefix));
         return out;
     }
     // Adjacent to the summary only: no arbitrary map-corner placements.

@@ -243,7 +243,7 @@ final class NatNavigationCard {
         if (inside && regions != null && !hasDrawable(tv)) {
             for (int size : new int[]{160,144,128,112}) {
                 int w=Math.round(size*d), h=Math.round(size*.50f*d);
-                for (NatBatteryPlacement.Box cell : NatBatteryPlacement.rightCell(box(panelRect),box(anchor),w,h,gap)) {
+                for (NatBatteryPlacement.Box cell : NatBatteryPlacement.rightCell(box(panelRect),box(anchor),regions[1]==null?null:box(regions[1]),w,h,gap)) {
                     Rect candidate=new Rect(cell.x,cell.y,cell.x+cell.w,cell.y+cell.h);
                     if (!blocked(root,candidate,match,regions,0)) {
                         area=candidate; chosen=size; placement="integrated-right"; break;

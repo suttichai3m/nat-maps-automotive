@@ -50,24 +50,28 @@ class TestIntegrated {
   check(!adj.isEmpty()&&adj.get(0).y==541,"adjacent above");cases++;
   for(NatBatteryPlacement.Box c:adj)check(viewport.contains(c)&&!c.overlaps(panel),"adjacent collision");cases++;
   check(NatBatteryPlacement.adjacent(b(0,0,90,50),b(0,0,90,50),b(1,1,10,10),160,80,4).isEmpty(),"tiny screen");cases++;
-  // Long Thai trip summary: right cell may overlap the verified SOC suffix,
-  // but must never cover the time/distance prefix or leave the panel.
+  // Long Thai trip summary: reject candidates covering the ETA/distance prefix.
   for(int scale:new int[]{1,2,3}){
    NatBatteryPlacement.Box longPanel=b(0,0,360*scale,124*scale);
    NatBatteryPlacement.Box longSoc=b(215*scale,40*scale,48*scale,20*scale);
    NatBatteryPlacement.Box prefix=b(8*scale,20*scale,190*scale,40*scale);
+   int selected=0;
    for(int w:new int[]{160,144,128,112}){
-    List<NatBatteryPlacement.Box> cells=NatBatteryPlacement.rightCell(longPanel,longSoc,w*scale,w*scale/2,4*scale);
-    check(!cells.isEmpty(),"right cell");
+    List<NatBatteryPlacement.Box> cells=NatBatteryPlacement.rightCell(longPanel,longSoc,prefix,w*scale,w*scale/2,4*scale);
+    check(w==160?cells.isEmpty():!cells.isEmpty(),"reject unsafe size, allow safe fallback");
     for(NatBatteryPlacement.Box c:cells){
      check(longPanel.contains(c),"right cell outside panel");
      check(c.x+c.w==356*scale,"right edge must stay fixed");
      check(!c.overlaps(prefix),"right cell covers ETA");
     }
+    if(selected==0&&!cells.isEmpty())selected=w;
     cases++;
    }
+   check(selected==144,"largest safe fallback must be 144dp");cases++;
+   check(!NatBatteryPlacement.rightCell(longPanel,longSoc,null,160*scale,80*scale,4*scale).isEmpty(),"split SOC supports full size");cases++;
+   check(NatBatteryPlacement.rightCell(longPanel,longSoc,longPanel,112*scale,56*scale,4*scale).isEmpty(),"fully occupied panel rejected");cases++;
   }
-  check(NatBatteryPlacement.rightCell(b(0,0,90,50),b(20,10,20,10),112,56,4).isEmpty(),"no unsafe tiny cell");cases++;
+  check(NatBatteryPlacement.rightCell(b(0,0,90,50),b(20,10,20,10),null,112,56,4).isEmpty(),"no unsafe tiny cell");cases++;
   System.out.println("PASS: "+cases+" integrated summary parser/placement cases (pure JVM)");
  }
 }
