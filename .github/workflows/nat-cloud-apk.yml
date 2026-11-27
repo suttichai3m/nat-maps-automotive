@@ -1,0 +1,66 @@
+name: NAT Cloud APK Builder
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: APK label (e.g. 2.0.2)
+        required: true
+        default: '2.0.2'
+      mode:
+        description: Build or generate default options for review
+        type: choice
+        options:
+          - build
+          - options
+        default: build
+permissions:
+  contents: read
+  packages: read
+concurrency:
+  group: nat-cloud-apk
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.ref == 'refs/heads/map-original'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: nat-cloud-signing
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Test all NAT modules
+        run: |
+          set -euo pipefail
+          for s in signed-soc navigation-summary theme-schedule battery-placement integrated-battery; do
+            bash "scripts/test-$s.sh"
+          done
+      - name: Build MPP
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.MORPHE_PACKAGES_TOKEN || github.token }}
+        run: |
+          bash gradlew --no-daemon :patches:generatePatchesList
+          bash gradlew --no-daemon buildAndroid
+      - name: Patch, sign, verify and save privately
+        env:
+          GH_TOKEN: ${{ secrets.NAT_VAULT_TOKEN }}
+          VAULT: ${{ vars.NAT_VAULT_REPO }}
+          ORIGINAL_SHA256: ${{ vars.NAT_ORIGINAL_SHA256 }}
+          EXPECTED_CERT: ${{ vars.NAT_SIGNER_SHA256 }}
+          KEYSTORE_B64: ${{ secrets.NAT_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.NAT_KEYSTORE_PASSWORD }}
+          ENTRY_ALIAS: ${{ vars.NAT_KEY_ALIAS }}
+          ENTRY_PASSWORD: ${{ secrets.NAT_KEY_PASSWORD }}
+          VERSION: ${{ inputs.version }}
+          MODE: ${{ inputs.mode }}
+        run: bash scripts/nat-cloud-apk.sh
