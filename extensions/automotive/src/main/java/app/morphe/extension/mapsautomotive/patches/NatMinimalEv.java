@@ -32,7 +32,7 @@ final class NatMinimalEv {
         long openedAt=-1;
         String rendered="",diagnostic="";
         int left=-1,top=-1;
-        boolean vertical;
+        boolean vertical,explicitPanelRequest;
         View host(){return toolbar==null?null:toolbar.get();}
         View sheet(){return panel==null?null:panel.get();}
     }
@@ -150,13 +150,42 @@ final class NatMinimalEv {
     private static int dp(Context a,int v){return Math.round(v*a.getResources().getDisplayMetrics().density);}
     private static GradientDrawable background(int color,int radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(radius);return g;}
     private static TextView button(Activity a,String symbol,String description,Runnable action){
-        TextView t=new TextView(a);t.setTag(OWN);t.setText(symbol);t.setTextSize(23);t.setGravity(Gravity.CENTER);t.setContentDescription(description);t.setOnClickListener(v->{try{action.run();}catch(RuntimeException ex){clear(a);ReportLog.w("NatMinimalEv","Optional control failed",ex);}});return t;
+        TextView t=new TextView(a);t.setTag(OWN);t.setText(symbol);t.setTextSize(23);t.setGravity(Gravity.CENTER);t.setContentDescription(description);t.setTooltipText(description);t.setOnClickListener(v->{try{action.run();}catch(RuntimeException ex){clear(a);ReportLog.w("NatMinimalEv","Optional control failed",ex);}});return t;
     }
     private static void style(TextView t,boolean active,boolean dark,int radius){
-        t.setBackground(background(active?0xff16805c:dark?0xff20303a:0xffffffff,radius));t.setTextColor(active||dark?Color.WHITE:0xff263238);
+        int fg=active||dark?Color.WHITE:0xff263238;
+        t.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(dark?0x33ffffff:0x22000000),
+                background(active?0xff16805c:dark?0xff20303a:0xffffffff,radius),null));
+        t.setTextColor(fg);
+        if(t instanceof ToolbarIcon)((ToolbarIcon)t).invalidate();
+    }
+    /** Uniform vector strokes, independent of font and emoji rendering on the head unit. */
+    private static final class ToolbarIcon extends TextView {
+        final String symbol;final android.graphics.Paint pen=new android.graphics.Paint(3);
+        ToolbarIcon(Context c,String symbol){super(c);this.symbol=symbol;}
+        @Override protected void onDraw(android.graphics.Canvas canvas){
+            float k=Math.min(getWidth(),getHeight())/48f;
+            canvas.save();canvas.translate(getWidth()/2f,getHeight()/2f);canvas.scale(k,k);
+            pen.setColor(getCurrentTextColor());pen.setStrokeWidth(2.1f);pen.setStrokeCap(android.graphics.Paint.Cap.ROUND);pen.setStrokeJoin(android.graphics.Paint.Join.ROUND);pen.setStyle(android.graphics.Paint.Style.STROKE);
+            android.graphics.Path path=new android.graphics.Path();
+            switch(symbol){
+                case "⚡":path.moveTo(2,-13);path.lineTo(-10,1);path.lineTo(-1,1);path.lineTo(-3,13);path.lineTo(10,-3);path.lineTo(1,-3);path.close();canvas.drawPath(path,pen);break;
+                case "↗":canvas.drawLine(-12,10,12,10,pen);path.moveTo(-11,4);path.lineTo(-4,-3);path.lineTo(2,1);path.lineTo(11,-10);canvas.drawPath(path,pen);canvas.drawLine(4,-10,11,-10,pen);canvas.drawLine(11,-10,11,-3,pen);break;
+                case "☷":for(int y=-9;y<=9;y+=9){canvas.drawCircle(-10,y,1,pen);canvas.drawLine(-4,y,11,y,pen);}break;
+                case "⊘":canvas.drawCircle(0,0,11,pen);canvas.drawLine(-8,8,8,-8,pen);break;
+                case "ⓘ":canvas.drawCircle(0,0,12,pen);canvas.drawCircle(0,-6,1,pen);canvas.drawLine(0,-1,0,7,pen);break;
+                default:break;
+            }
+            canvas.restore();
+        }
+    }
+    private static TextView toolbarButton(Activity a,String symbol,String description,Runnable action){
+        ToolbarIcon t=new ToolbarIcon(a,symbol);t.setTag(OWN);t.setContentDescription(description);t.setTooltipText(description);t.setFocusable(true);
+        t.setOnClickListener(v->{try{action.run();}catch(RuntimeException ex){clear(a);ReportLog.w("NatMinimalEv","Optional control failed",ex);toast(a,"NAT control unavailable");}});
+        return t;
     }
     private static TextView diagnosticsButton(Activity a,State s){
-        TextView t=button(a,"ⓘ","System Diagnostics — CPU / RAM / GPS",()->{
+        TextView t=toolbarButton(a,"ⓘ","System Diagnostics — CPU / RAM / GPS",()->{
             View root=a.getWindow().peekDecorView();
             if(a.isFinishing()||a.isDestroyed()||!a.hasWindowFocus()||root==null
                     ||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY)||!controls(root).mapControls)return;
@@ -168,7 +197,8 @@ final class NatMinimalEv {
         return t;
     }
     private static void switchPanel(Activity a,State s,int which){
-        s.mode=s.mode==which?0:which;removePanel(s);View root=a.getWindow().peekDecorView();if(root!=null)refresh(a,root);
+        if(a.isFinishing()||a.isDestroyed()||!a.hasWindowFocus()||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY))return;
+        s.mode=s.mode==which?0:which;removePanel(s);View root=a.getWindow().peekDecorView();if(root!=null){s.explicitPanelRequest=true;try{refresh(a,root);}finally{s.explicitPanelRequest=false;}}
     }
     private static void put(FrameLayout host,View view,Rect slot,boolean newView){
         android.graphics.Point origin=new android.graphics.Point();Rect dummy=new Rect();host.getGlobalVisibleRect(dummy,origin);
@@ -186,14 +216,14 @@ final class NatMinimalEv {
     private static void showPanel(Activity a,FrameLayout host,State s,List<View> views,Rect bounds,Rect toolbarSlot,boolean dark,NatPrediction.Snapshot f){
         if(s.mode==0){removePanel(s);return;}
         int w=Math.min(dp(a,340),bounds.width()-dp(a,100)),h=Math.min(dp(a,230),bounds.height()-dp(a,100));
-        if(w<dp(a,215)||h<dp(a,145)){removePanel(s);s.mode=0;toast(a,"พื้นที่หน้าจอไม่พอ ใช้เมนู BYD Battery Settings");return;}
+        if(w<dp(a,215)||h<dp(a,145)){panelUnavailable(a,s,f);return;}
         Rect slot=null;
         for(int edge=0;edge<2&&slot==null;edge++)for(float fy:new float[]{.25f,.40f,.12f}){
             int x=edge==0?bounds.left+dp(a,12):bounds.right-dp(a,12)-w;
             int y=bounds.top+(int)(bounds.height()*fy);Rect q=new Rect(x,y,x+w,y+h);
             if(bounds.contains(q)&&!Rect.intersects(toolbarSlot,q)&&free(views,q,host)){slot=q;break;}
         }
-        if(slot==null){removePanel(s);s.mode=0;toast(a,"ไม่พบพื้นที่ปลอดภัย ใช้เมนู BYD Battery Settings");report(s,"Panel unavailable: native controls protected");return;}
+        if(slot==null){panelUnavailable(a,s,f);return;}
         NatLiveEnergy.Reading live=NatPrediction.liveReading();
         double observed=f==null?Double.NaN:live.net,cost=NatStabilityMath.cost(observed,tariff(a));
         double displayedPower=f==null?Double.NaN:live.power;
@@ -240,6 +270,34 @@ final class NatMinimalEv {
         }
         put(host,box,slot,true);s.panel=new WeakReference<>(box);
         if(oldScroll>0){final int position=oldScroll;scroll.post(()->scroll.scrollTo(0,position));}
+    }
+    /** Explicit user request may open a read-only snapshot dialog when no collision-free panel fits.
+     * Never opens spontaneously from the periodic refresh, and never invokes a native navigation action. */
+    private static void panelUnavailable(Activity a,State s,NatPrediction.Snapshot f){
+        int mode=s.mode;removePanel(s);s.mode=0;
+        report(s,"Panel unavailable: native controls protected");
+        if(!s.explicitPanelRequest){toast(a,"ไม่พบพื้นที่ปลอดภัย ใช้เมนู BYD Battery Settings");return;}
+        if(a.isFinishing()||a.isDestroyed()||!a.hasWindowFocus())return;
+        NatLiveEnergy.Reading live=NatPrediction.liveReading();
+        String message;
+        if(mode==1){
+            double used=f==null?Double.NaN:live.net;
+            message="LIVE POWER • ค่าเฉลี่ยช่วงตัวอย่าง\n"+number(f==null?Double.NaN:live.power,"kW")
+                +"\n\nพลังงานสุทธิที่สังเกตได้: "+number(used,"kWh")
+                +"\nพลังงานที่ต้องใช้อีก: "+number(f==null?Double.NaN:f.remainingKwh,"kWh")
+                +"\nสิ้นเปลืองจากช่วงที่มีเลขไมล์: "+number(f==null?Double.NaN:live.rate,"kWh/100 km")
+                +"\nพลังงานเพิ่มขณะเคลื่อนที่: "+number(f==null?Double.NaN:live.increase,"kWh")
+                +"\nสิ้นเปลืองตาม forecast: "+number(f==null?Double.NaN:NatStabilityMath.rate(f.remainingKwh,f.km),"kWh/100 km")
+                +"\nค่าไฟประมาณการ: "+number(NatStabilityMath.cost(used,tariff(a)),"THB")
+                +"\n\nช่วงที่มีเลขไมล์: "+number(f==null?Double.NaN:live.km,"km")+" • รออย่างน้อย 2 กม. • ไม่ใช่ยอดทั้งเที่ยวหรือ Regen ที่ยืนยันแล้ว";
+        }else{
+            message=f==null?"ไม่มี forecast สดที่ตรงกับเส้นทาง":(f.charges==0?"ยังไม่มีจุดชาร์จใน forecast":"แผนจาก Maps (ไม่มีชื่อสถานี)"+f.plan)+"\n\nแบตปลายทางตาม Maps: "+f.google+"%";
+            message+="\n\nค้นหาสถานีด้วยปุ่ม EV Charging ของ Maps หลังปิดหน้าต่าง";
+        }
+        if(f==null&&mode==1)message+="\n\nไม่มี forecast สดที่ตรงกับเส้นทาง";
+        new android.app.AlertDialog.Builder(a).setTitle(mode==1?"Energy Prediction":"Charging Plan")
+                .setMessage("ข้อมูล ณ เวลาที่เปิด • Snapshot (จอดรถก่อนใช้งาน)\n\n"+message)
+                .setPositiveButton("Close",null).show();
     }
     private static final class PowerGauge extends View {
         final double kw;final boolean dark;final android.graphics.Paint paint=new android.graphics.Paint(3);
@@ -318,7 +376,7 @@ final class NatMinimalEv {
             TextView[] keys;
             if(chosen.count==1)keys=new TextView[]{diagnosticsButton(a,owner)};
             else {
-                TextView[] original={button(a,"⚡","EV Charging",()->act(a,owner,false)),button(a,"↗","Energy Prediction",()->switchPanel(a,owner,1)),button(a,"☷","Charging Plan",()->switchPanel(a,owner,2)),button(a,"⊘","Clean Mode",()->{act(a,owner,true);refresh(a,a.getWindow().peekDecorView());})};
+                TextView[] original={toolbarButton(a,"⚡","EV Charging",()->act(a,owner,false)),toolbarButton(a,"↗","Energy Prediction",()->switchPanel(a,owner,1)),toolbarButton(a,"☷","Charging Plan",()->switchPanel(a,owner,2)),toolbarButton(a,"⊘","Clean Mode",()->{act(a,owner,true);refresh(a,a.getWindow().peekDecorView());})};
                 keys=java.util.Arrays.copyOf(original,chosen.count);
                 if(NatToolbarLayout.hasDiagnostics(chosen.count))keys[NatToolbarLayout.diagnosticIndex(chosen.count)]=diagnosticsButton(a,owner);
             }
