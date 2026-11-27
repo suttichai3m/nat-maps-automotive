@@ -1575,6 +1575,11 @@ public final class BydBatteryPatch {
             natTimeline.setText(thai ? "NAT V2.0 — ประวัติการเดินทาง" : "NAT V2.0 — Trip Timeline");
             natTimeline.setOnClickListener(v -> NatTripTimeline.show(host));
             content.addView(natTimeline);
+            android.widget.Switch minimalEv = new android.widget.Switch(themed);
+            minimalEv.setText(thai ? "ปุ่ม EV แบบมินิมอล (ทดลอง)" : "Minimal EV shortcut (experimental)");
+            minimalEv.setChecked(NatMinimalEv.enabled(host));
+            minimalEv.setOnCheckedChangeListener((v,on)->NatMinimalEv.setEnabled(host,on));
+            content.addView(minimalEv);
 
             // On/off. The whole row is the touch target; the switch shows the stored choice, which
             // changes only after the restart is confirmed.

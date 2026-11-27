@@ -111,3 +111,21 @@ public class TestNatTripMath {
 JAVA
 javac --release 17 -encoding UTF-8 -d "$D" "$P/NatTripMath.java" "$D/TestNatTripMath.java"
 java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatTripMath
+
+cat > "$D/TestNatMinimalEv.java" <<'JAVA'
+package app.morphe.extension.mapsautomotive.patches;
+public class TestNatMinimalEv {
+ static int n; static void check(boolean x){if(!x)throw new AssertionError("EV case "+n);n++;}
+ public static void main(String[] args){
+  check(NatMinimalEvRules.ev("การชาร์จ EV"));check(NatMinimalEvRules.ev("  EV charging stations "));check(NatMinimalEvRules.ev("สถานีชาร์จรถยนต์ไฟฟ้า"));
+  check(!NatMinimalEvRules.ev("Station near charging stations"));check(!NatMinimalEvRules.ev("End navigation"));
+  check(NatMinimalEvRules.along("Search along your route"));check(!NatMinimalEvRules.along("Search"));
+  check(NatMinimalEvRules.explicitHide("Hide charging stations"));check(!NatMinimalEvRules.explicitHide("Hide route"));
+  check(NatMinimalEvRules.closeSearch("Clear search results"));check(!NatMinimalEvRules.closeSearch("Clear route"));check(!NatMinimalEvRules.closeSearch("Back"));
+  check(NatMinimalEvRules.allowClose(true,true,true,true));check(!NatMinimalEvRules.allowClose(false,true,true,true));check(!NatMinimalEvRules.allowClose(true,false,true,true));check(!NatMinimalEvRules.allowClose(true,true,false,true));check(!NatMinimalEvRules.allowClose(true,true,true,false));
+  System.out.println("PASS: "+n+" minimal EV native control rules");
+ }
+}
+JAVA
+javac --release 17 -encoding UTF-8 -d "$D" "$P/NatMinimalEvRules.java" "$D/TestNatMinimalEv.java"
+java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatMinimalEv

@@ -157,6 +157,7 @@ final class NatNavigationCard {
         if(known) result.removeIf(m->m.panel==null);
         return result;
     }
+    static boolean hasVerifiedRoute(View root) { List<Match> m=matches(root); return m.size()==1 && m.get(0).panel!=null; }
     // Measure the actual rendered text, not the width of a match-parent TextView.
     // Layout selection includes ReplacementSpan/emoji widths. Unknown layout fails closed.
     private static Rect textRange(TextView tv,int start,int end) {

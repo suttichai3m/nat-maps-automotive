@@ -122,10 +122,12 @@ public final class NatArrivalUi {
                         attach(root, a);
                         NatNavigationCard.refresh(root);
                         scan(root, 0);
-                    } else if (root != null) { NatNavigationCard.clear(root); }
+                        try { NatMinimalEv.refresh(a,root); } catch (RuntimeException ignored) { NatMinimalEv.clear(a); }
+                    } else if (root != null) { NatNavigationCard.clear(root); NatMinimalEv.clear(a); }
                 } catch (RuntimeException error) {
                     View root = a.getWindow().peekDecorView();
                     if (root != null) NatNavigationCard.clear(root);
+                    NatMinimalEv.clear(a);
                     ReportLog.w("NatArrivalUi", "Scan failed", error);
                 }
                 MAIN.postDelayed(this, 1000);
