@@ -246,8 +246,8 @@ final class NatNavigationCard {
     }
     // The only native content we may visually replace is the complete, verified SOC text.
     // Never intercept touches; protect other text and controls even inside the status panel.
-    private static boolean blocked(View v, Rect area, Match match, Rect[] source,int depth) {
-        if(depth>40 || !v.isShown()) return false;
+    private static boolean blocked(View v, Rect area, Match match, Rect[] source,View removable,int depth) {
+        if(v==removable || depth>40 || !v.isShown()) return false;
         Rect r=new Rect();
         if(!v.getGlobalVisibleRect(r) || !Rect.intersects(r,area)) return false;
         if(v==match.anchor && source!=null && !v.isClickable() && !v.isLongClickable() && !hasDrawable(match.anchor)) {
@@ -258,7 +258,7 @@ final class NatNavigationCard {
         if(v instanceof ViewGroup) {
             ViewGroup g=(ViewGroup)v;
             if((g.isClickable() || g.isLongClickable()) && !ancestor(g,match.anchor) && g.getWidth()<=area.width()*3 && g.getHeight()<=area.height()*3) return true;
-            for(int i=0;i<g.getChildCount();i++) if(blocked(g.getChildAt(i),area,match,source,depth+1)) return true;
+            for(int i=0;i<g.getChildCount();i++) if(blocked(g.getChildAt(i),area,match,source,removable,depth+1)) return true;
             return false;
         }
         if(v instanceof TextView) {
@@ -287,6 +287,9 @@ final class NatNavigationCard {
         float d=root.getResources().getDisplayMetrics().density;
         int gap=Math.max(1,Math.round(4*d)); Rect area=null; int chosen=0; String placement="";
         Card existing=CARDS.get(root);
+        List<View> removableIcons=new ArrayList<>();
+        if(inside&&regions!=null) findIcons(match.panel,match,regions[0],removableIcons,0);
+        View removable=removableIcons.size()==1?removableIcons.get(0):null;
         // Keep a single right-aligned card inside the native summary. A verified
         // suffix can share its cell; the distance/ETA prefix and controls cannot.
         if (inside && regions != null && !hasDrawable(tv)) {
@@ -294,7 +297,7 @@ final class NatNavigationCard {
                 int w=Math.round(size*d), h=Math.round(size*.50f*d);
                 for (NatBatteryPlacement.Box cell : NatBatteryPlacement.rightCell(box(panelRect),box(anchor),regions[1]==null?null:box(regions[1]),w,h,gap)) {
                     Rect candidate=new Rect(cell.x,cell.y,cell.x+cell.w,cell.y+cell.h);
-                    if (!blocked(root,candidate,match,regions,0)) {
+                    if (!blocked(root,candidate,match,regions,removable,0)) {
                         area=candidate; chosen=size; placement="integrated-right"; break;
                     }
                 }
@@ -349,7 +352,7 @@ final class NatNavigationCard {
             p.setStyle(Paint.Style.FILL); p.setColor(dark?0xff202c32:0xfff2f6f4);
             c.drawRoundRect(new RectF(b),10*u,10*u,p);
             p.setTextAlign(Paint.Align.CENTER); p.setTypeface(Typeface.DEFAULT); p.setTextSize(11*u); p.setColor(fg);
-            c.drawText(thai?"แบตเมื่อถึงปลายทาง":"Arrival battery",b.centerX(),b.top+13*u,p);
+            c.drawText(thai?"แบตเมื่อถึง":"Arrival battery",b.centerX(),b.top+13*u,p);
             float l=b.left+5*u,r=b.right-9*u,t=b.top+18*u,bot=b.top+76*u;
             if(soc>0) {
                 float fill=(r-l-6*u)*NatSignedSoc.bar(soc)/100f;

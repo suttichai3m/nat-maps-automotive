@@ -10,20 +10,33 @@ import java.util.Locale;
 /** Independent planning estimate; never changes Maps or vehicle data. */
 final class NatPrediction {
     private static volatile Snapshot snapshot;
-    private static final class Snapshot {
-        final long at; final double soc, capacity, km; final int google, charges; final String plan; final int next; final double nextKm;
-        Snapshot(double s,double c,double d,int g,int n,String plan,int next,double nextKm) { at=SystemClock.elapsedRealtime(); soc=s; capacity=c; km=d; google=g; charges=n; this.plan=plan; this.next=next; this.nextKm=nextKm; }
+    private static final NatStabilityMath.Observed observed=new NatStabilityMath.Observed();
+    private static boolean observedActive;
+    static synchronized void observe(BydDriveLog.Sample s){
+        boolean active=freshSnapshot()!=null;
+        if(!active||!observedActive)observed.reset();
+        observedActive=active;if(active)observed.observe(s.energyWh,s.elapsed,s.speedKmh);
     }
-    static void capture(BydForecast.Forecast f, double soc, int capacityWh) {
-        if (f.isEmpty() || !Double.isFinite(soc) || capacityWh <= 0 || f.finalArrivalWh()==BydForecast.NO_ENERGY) { snapshot=null; return; }
-        StringBuilder plan=new StringBuilder(); int i=0;
+    static synchronized double observedKwh(){return observedActive&&freshSnapshot()!=null&&observed.pairs>0?observed.net:Double.NaN;}
+    static Snapshot freshSnapshot(){Snapshot s=snapshot;return s!=null&&BydBatteryPatch.isActive()&&NatStabilityMath.fresh(SystemClock.elapsedRealtime(),s.at)?s:null;}
+    static synchronized void clear(){snapshot=null;observed.reset();observedActive=false;}
+    static final class Snapshot {
+        final long at; final double soc, capacity, km; final int google, charges; final String plan; final int next; final double nextKm; final double remainingKwh;
+        Snapshot(double s,double c,double d,int g,int n,String plan,int next,double nextKm,double remainingKwh) { at=SystemClock.elapsedRealtime(); soc=s; capacity=c; km=d; google=g; charges=n; this.plan=plan; this.next=next; this.nextKm=nextKm; this.remainingKwh=remainingKwh; }
+    }
+    static synchronized void capture(BydForecast.Forecast f, double soc, int capacityWh,int currentWh) {
+        if (f.isEmpty() || !Double.isFinite(soc) || capacityWh <= 0 || f.finalArrivalWh()==BydForecast.NO_ENERGY) { clear(); return; }
+        StringBuilder plan=new StringBuilder(); int i=0; long minimumAdded=0; boolean complete=true;
         for(BydForecast.Stop stop:f.stops) if(stop.charging) {
+            if(!stop.hasArrival||stop.arrivalWh<0||stop.minDepartureWh<=0||stop.minDepartureWh<stop.arrivalWh||stop.minDepartureWh>capacityWh)complete=false;
+            else minimumAdded+=(long)stop.minDepartureWh-stop.arrivalWh;
             plan.append("\nจุดชาร์จ ").append(++i).append(": ").append(stop.hasArrival?energyPercent(stop.arrivalWh,capacityWh):"?").append(" → ").append(stop.minDepartureWh>0?energyPercent(stop.minDepartureWh,capacityWh):"?").append(" (ขั้นต่ำ)");
             if(stop.chargeTimeS>0) plan.append(" · ").append(Math.round(stop.chargeTimeS/60.0)).append(" นาที");
         }
         BydForecast.Stop first=f.stops.get(0);
-        snapshot=new Snapshot(soc,capacityWh/1000.0,f.totalDistanceM()/1000.0,BydDisplayCurve.shown(f.finalArrivalWh(),capacityWh),f.chargeStops(),plan.toString(),first.hasArrival?BydDisplayCurve.shown(first.arrivalWh,capacityWh):-1,first.distanceM/1000.0);
+        snapshot=new Snapshot(soc,capacityWh/1000.0,f.totalDistanceM()/1000.0,signed(f.finalArrivalWh(),capacityWh),f.chargeStops(),plan.toString(),first.hasArrival?signed(first.arrivalWh,capacityWh):Integer.MIN_VALUE,first.distanceM/1000.0,NatStabilityMath.remainingKwh(currentWh,f.finalArrivalWh(),minimumAdded,complete));
     }
+    private static int signed(int wh,int cap){return NatStabilityMath.signedSoc(wh,cap,BydDisplayCurve.shown(wh,cap));}
     private static String energyPercent(int wh,int cap) { return wh<=0 ? fmt(wh*100.0/cap)+"%" : BydDisplayCurve.shown(wh,cap)+"%"; }
     static String navigationSummary(android.content.Context context,int value,double km) {
         Snapshot s=snapshot;
@@ -53,7 +66,7 @@ final class NatPrediction {
         Snapshot s=snapshot;
         boolean live=s!=null && SystemClock.elapsedRealtime()-s.at<=30000 && BydBatteryPatch.isActive();
         LinearLayout l=new LinearLayout(a); l.setOrientation(LinearLayout.VERTICAL); int pad=(int)(20*a.getResources().getDisplayMetrics().density); l.setPadding(pad,pad,pad,pad);
-        TextView note=new TextView(a); note.setText(live?"ข้อมูลจาก forecast ล่าสุด ณ เวลาเปิดหน้าต่าง / ตรวจสอบเส้นทางก่อนใช้":"ไม่มี forecast สด — กรอกข้อมูลเอง (ไม่ใช่ข้อมูลสด)"); l.addView(note); if(live && s.charges==0) { TextView estimate=new TextView(a); double energy=(s.soc-s.google)*s.capacity/100.0; if(energy>=0&&s.km>0) estimate.setText(String.format(Locale.US,"SOC-based estimate: %.1f kWh • %.1f kWh/100 km",energy,energy*100/s.km)); else estimate.setText("Energy estimate unavailable"); l.addView(estimate); } if(live && s.charges>0) { TextView plan=new TextView(a); plan.setText("แผนจาก Maps (ไม่มีชื่อสถานีใน forecast)"+s.plan+"\nปลายทาง: "+(s.google>=0?s.google+"%":"ไม่ทราบ")); l.addView(plan); }
+        TextView note=new TextView(a); note.setText(live?"ข้อมูลจาก forecast ล่าสุด ณ เวลาเปิดหน้าต่าง / ตรวจสอบเส้นทางก่อนใช้":"ไม่มี forecast สด — กรอกข้อมูลเอง (ไม่ใช่ข้อมูลสด)"); l.addView(note); if(live && s.charges==0) { TextView estimate=new TextView(a); double energy=s.remainingKwh; if(energy>=0&&s.km>0) estimate.setText(String.format(Locale.US,"SOC-based estimate: %.1f kWh • %.1f kWh/100 km",energy,energy*100/s.km)); else estimate.setText("Energy estimate unavailable"); l.addView(estimate); } if(live && s.charges>0) { TextView plan=new TextView(a); plan.setText("แผนจาก Maps (ไม่มีชื่อสถานีใน forecast)"+s.plan+"\nปลายทาง: "+(s.google+"%")); l.addView(plan); }
         EditText soc=field(l,"แบตปัจจุบัน %",live?fmt(s.soc):"");
         EditText km=field(l,"ระยะทางคงเหลือ กม.",live?fmt(s.km):"");
         EditText cap=field(l,"ความจุใช้งาน kWh (ปรับได้)",p.getString("capacity",live?fmt(s.capacity):"82.56"));

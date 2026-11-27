@@ -71,7 +71,7 @@ public final class NatArrivalUi {
         NatSize(int value, boolean dark, boolean thai, String comparison, boolean navigation) { this.navigation = navigation; this.value = value; this.dark = dark; this.thai = thai; this.comparison = comparison; }
         private Paint numberPaint(Paint original) {
             Paint p = new Paint(original);
-            p.setTextSize(original.getTextSize() * (navigation ? 1.8f : 2.0f));
+            p.setTextSize(original.getTextSize() * 2.0f);
             p.setTypeface(Typeface.create(original.getTypeface(), Typeface.BOLD));
             p.setColor(value < 0 ? (dark ? 0xffff8888 : 0xffb91c1c) : (dark ? 0xffffffff : 0xff111111));
             return p;
@@ -186,7 +186,7 @@ public final class NatArrivalUi {
         });
     }
     private static void scan(View view, int depth) {
-        if (depth > 40 || view.getVisibility() != View.VISIBLE) return;
+        if (depth > 40 || view.getVisibility() != View.VISIBLE || NatMinimalEv.owned(view)) return;
         if (view instanceof TextView) {
             TextView tv = (TextView) view;
             if (tv instanceof android.widget.EditText || tv.isTextSelectable()) return;

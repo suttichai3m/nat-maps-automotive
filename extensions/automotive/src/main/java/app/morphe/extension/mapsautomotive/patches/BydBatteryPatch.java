@@ -417,7 +417,7 @@ public final class BydBatteryPatch {
             long wall = System.currentTimeMillis(), now = SystemClock.elapsedRealtime();
             boolean fresh = lastSampleAt != 0 && now - lastSampleAt <= FRESH_MS;
             int batteryWh = fresh ? sampleEnergyWh : -1;
-            NatPrediction.capture(forecast, fresh ? sampleSoc : Double.NaN, fresh ? sampleCapacityWh : -1);
+            NatPrediction.capture(forecast, fresh ? sampleSoc : Double.NaN, fresh ? sampleCapacityWh : -1,batteryWh);
             if (!forecast.isEmpty()) forecastSeen = true;
             // The start-up reset is recorded below but does not close a drive restored after a restart.
             if (forecastSeen) {
@@ -550,6 +550,7 @@ public final class BydBatteryPatch {
             adjustedSent = false;
             lastSoc = Double.NaN;
             BydDisplayCurve.clear();
+            NatPrediction.clear();
             notifyModelChanged();
             ReportLog.i(TAG, "battery reading is stale, energy model withdrawn");
         }
@@ -705,6 +706,7 @@ public final class BydBatteryPatch {
             record.model = file == null ? "fallback" : file.name + ":" + file.drainAtTimeText(bydTemperature(file, outsideC))
                     + ":m" + massKg(file) + (adjustedSent ? String.format(Locale.ROOT, ":A%.3f/%d", sentFactor, sentAuxW) : "");
             BydDriveLog.sample(record);
+            try { NatPrediction.observe(record); } catch (RuntimeException ignored) { /* optional energy summary */ }
             try { NatTripTimeline.sample(context, record); } catch (RuntimeException ignored) { /* optional recorder */ }
         } catch (Throwable error) {
             if (recordFailures++ % 30 == 0) ReportLog.w(TAG, "drive records failed: " + BydEnergyReader.describe(error));

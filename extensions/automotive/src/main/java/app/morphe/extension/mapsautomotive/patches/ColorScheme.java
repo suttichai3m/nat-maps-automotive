@@ -532,6 +532,7 @@ public final class ColorScheme {
                 Configuration config = new Configuration(liveConfiguration());
                 if (on()) {
                     boolean target = nightColors(application());
+                    ReportLog.i(TAG,"NAT theme requested="+(target?"night":"day")+" system="+(nightFlag(config.uiMode)?"night":"day")+" attempt="+attempt);
                     config.uiMode = (config.uiMode & ~Configuration.UI_MODE_NIGHT_MASK)
                         | (target ? Configuration.UI_MODE_NIGHT_YES : Configuration.UI_MODE_NIGHT_NO);
                 }

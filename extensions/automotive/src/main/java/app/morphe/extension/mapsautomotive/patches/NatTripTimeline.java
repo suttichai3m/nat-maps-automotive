@@ -34,9 +34,10 @@ final class NatTripTimeline {
     private static boolean listening;
     private static final android.os.Handler WATCH=new android.os.Handler(Looper.getMainLooper());
     private static volatile long lastSample=-1;
-    private static final Runnable WATCHDOG=()->{synchronized(NatTripTimeline.class){if(listening && SystemClock.elapsedRealtime()-lastSample>35000){stop();status="Vehicle data stale — GPS paused";}}};
+    private static final Runnable WATCHDOG=()->{synchronized(NatTripTimeline.class){if(listening && SystemClock.elapsedRealtime()-lastSample>35000){stop();setStatus("Vehicle data stale — GPS paused");}}};
     private static long lastMoving=-1, lastFix=-1;
     private static volatile String status="Waiting for vehicle";
+    private static void setStatus(String value){if(!value.equals(status)){status=value;ReportLog.i("NatTimeline",value);}}
     private static volatile String liveEnergy="Battery power estimate unavailable";
     private static int previousWh=-1; private static long previousEnergyAt=-1;
     private static final LocationListener listener=new LocationListener(){
@@ -64,15 +65,15 @@ final class NatTripTimeline {
     }
     /** Existing BYD worker, approximately every 10 seconds. Only moving samples are stored. */
     static synchronized void sample(Context c,BydDriveLog.Sample s){
-        if(!enabled(c)){stop();lastMoving=-1;status="Off";return;}
+        if(!enabled(c)){stop();lastMoving=-1;setStatus("Off");return;}
         long now=SystemClock.elapsedRealtime(); lastSample=now;
         double kw=NatTripMath.averageKw(previousWh,s.energyWh,now-previousEnergyAt);
         liveEnergy=Double.isFinite(kw)?String.format(Locale.US,"Recent battery change rate: %.1f kW (estimated average, not motor power)",kw):"Battery power estimate unavailable";
         previousWh=s.energyWh;previousEnergyAt=now;
         WATCH.removeCallbacks(WATCHDOG); WATCH.postDelayed(WATCHDOG,36000);
-        if(!Double.isFinite(s.speedKmh)||s.speedKmh<=1||s.speedKmh>250){
-            if(lastMoving<0||now-lastMoving>=GAP)stop();
-            status="Parked or speed unavailable";return;
+        if(!NatStabilityMath.moving(s.speedKmh)){
+            if(!Double.isFinite(s.speedKmh)||s.speedKmh>250||lastMoving<0||now-lastMoving>=60000)stop();
+            setStatus("Parked or speed unavailable");return;
         }
         lastMoving=now;
         try{
@@ -83,9 +84,9 @@ final class NatTripTimeline {
                 listening=true;
             }
             Location f=manager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-            if(f==null){status="Waiting for GPS";return;}
+            if(f==null){setStatus("Waiting for GPS");return;}
             long fix=f.getElapsedRealtimeNanos()/1000000;
-            if(fix<=0||now-fix<0||now-fix>MAX_AGE||!f.hasAccuracy()||f.getAccuracy()>50||f.getAccuracy()<0){status="Waiting for accurate GPS";return;}
+            if(fix<=0||now-fix<0||now-fix>MAX_AGE||!f.hasAccuracy()||f.getAccuracy()>50||f.getAccuracy()<0){setStatus("Waiting for accurate GPS");return;}
             if(fix<=lastFix)return;
             double lat=f.getLatitude(),lon=f.getLongitude();
             if(!Double.isFinite(lat)||!Double.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180)return;
@@ -96,10 +97,10 @@ final class NatTripTimeline {
             if(s.mileage01km>=0)v.put("odo",s.mileage01km);
             SQLiteDatabase d=store(c).getWritableDatabase();
             d.insertOrThrow("points",null,v);
-            lastFix=fix;status="Recording GPS";
+            lastFix=fix;setStatus("Recording GPS");
             d.execSQL("DELETE FROM points WHERE id <= (SELECT MAX(id)-"+MAX_POINTS+" FROM points) OR wall < ?",new Object[]{System.currentTimeMillis()-90L*86400000});
-        }catch(SecurityException e){stop();status="Location permission required";}
-        catch(RuntimeException e){stop();status="GPS or storage unavailable";}
+        }catch(SecurityException e){stop();setStatus("Location permission required");}
+        catch(RuntimeException e){stop();setStatus("GPS or storage unavailable");}
     }
     private static final class Point {
         long time; double lat,lon,soc=Double.NaN; int wh=-1,odo=-1;
@@ -192,7 +193,7 @@ final class NatTripTimeline {
         };
         toggle.setOnCheckedChangeListener((v,on)->{
             c.getSharedPreferences(PREF,0).edit().putBoolean(ENABLED,on).apply();
-            if(!on){synchronized(NatTripTimeline.class){stop();lastMoving=-1;status="Off";}}
+            if(!on){synchronized(NatTripTimeline.class){stop();lastMoving=-1;setStatus("Off");}}
             refresh.run();
         });
         span.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> p){} public void onItemSelected(android.widget.AdapterView<?> p,View v,int position,long id){period[0]=new int[]{1,7,30}[position];refresh.run();}});
