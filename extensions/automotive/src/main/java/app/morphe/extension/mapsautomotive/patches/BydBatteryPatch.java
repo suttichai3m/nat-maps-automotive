@@ -705,6 +705,7 @@ public final class BydBatteryPatch {
             record.model = file == null ? "fallback" : file.name + ":" + file.drainAtTimeText(bydTemperature(file, outsideC))
                     + ":m" + massKg(file) + (adjustedSent ? String.format(Locale.ROOT, ":A%.3f/%d", sentFactor, sentAuxW) : "");
             BydDriveLog.sample(record);
+            try { NatTripTimeline.sample(context, record); } catch (RuntimeException ignored) { /* optional recorder */ }
         } catch (Throwable error) {
             if (recordFailures++ % 30 == 0) ReportLog.w(TAG, "drive records failed: " + BydEnergyReader.describe(error));
         }
@@ -1570,6 +1571,10 @@ public final class BydBatteryPatch {
             natPrediction.setText("NAT Smart EV Prediction");
             natPrediction.setOnClickListener(v -> NatPrediction.show(host));
             content.addView(natPrediction);
+            Button natTimeline = new Button(themed);
+            natTimeline.setText(thai ? "NAT V2.0 — ประวัติการเดินทาง" : "NAT V2.0 — Trip Timeline");
+            natTimeline.setOnClickListener(v -> NatTripTimeline.show(host));
+            content.addView(natTimeline);
 
             // On/off. The whole row is the touch target; the switch shows the stored choice, which
             // changes only after the restart is confirmed.
