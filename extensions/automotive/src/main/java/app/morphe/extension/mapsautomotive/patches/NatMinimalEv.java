@@ -221,7 +221,7 @@ final class NatMinimalEv {
         for(int edge=0;edge<2&&slot==null;edge++)for(float fy:new float[]{.25f,.40f,.12f}){
             int x=edge==0?bounds.left+dp(a,12):bounds.right-dp(a,12)-w;
             int y=bounds.top+(int)(bounds.height()*fy);Rect q=new Rect(x,y,x+w,y+h);
-            if(bounds.contains(q)&&!Rect.intersects(toolbarSlot,q)&&free(views,q,host)){slot=q;break;}
+            if(bounds.contains(q)&&!Rect.intersects(toolbarSlot,q)&&(global(s.current==null?null:s.current.get())==null||!Rect.intersects(global(s.current.get()),q))&&free(views,q,host)){slot=q;break;}
         }
         if(slot==null){panelUnavailable(a,s,f);return;}
         NatLiveEnergy.Reading live=NatPrediction.liveReading();
@@ -326,7 +326,13 @@ final class NatMinimalEv {
         if(!current&&s.mode!=1){removeMini(s,false);return;}
         int w=dp(a,current?142:166),h=dp(a,58),edge=dp(a,12);
         Rect slot=null,panel=global(s.sheet()),other=global(current?(s.remaining==null?null:s.remaining.get()):(s.current==null?null:s.current.get()));
-        for(float y:current?new float[]{.035f,.12f,.19f}:new float[]{.82f,.72f,.64f})for(int side=0;side<3&&slot==null;side++){
+        if(current){
+            NatToolbarLayout.Slot fixed=NatToolbarLayout.currentBattery(bounds.left,bounds.top,bounds.right,bounds.bottom,w,h,edge,q->{
+                Rect r=new Rect(q.x,q.y,q.x+q.w,q.y+q.h);
+                return !Rect.intersects(toolbar,r)&&(panel==null||!Rect.intersects(panel,r))&&(other==null||!Rect.intersects(other,r))&&free(views,r,host);
+            });
+            if(fixed!=null)slot=new Rect(fixed.x,fixed.y,fixed.x+fixed.w,fixed.y+fixed.h);
+        }else for(float y:new float[]{.82f,.72f,.64f})for(int side=0;side<3&&slot==null;side++){
             int x=side==0?(current?bounds.right-edge-w:bounds.centerX()-w/2):side==1?bounds.left+edge:bounds.right-edge-w;
             int top=bounds.top+(int)(bounds.height()*y);Rect q=new Rect(x,top,x+w,top+h);
             if(bounds.contains(q)&&!Rect.intersects(toolbar,q)&&(panel==null||!Rect.intersects(panel,q))&&(other==null||!Rect.intersects(other,q))&&free(views,q,host))slot=q;
@@ -352,7 +358,7 @@ final class NatMinimalEv {
         boolean route=NatNavigationCard.recentlyVerified(root);
         NatPrediction.Snapshot forecast=NatPrediction.freshSnapshot();boolean fresh=forecast!=null;int stops=fresh?forecast.charges:-1;
         if(NatStabilityMath.autoHide(state.previousFresh,state.previousStops,fresh,stops)||(fresh&&state.previousSession!=forecast.session)){
-            state.mode=0;removePanel(state);report(state,"Auto-hide: new forecast or changed charging-stop count");
+            if(!state.explicitPanelRequest){state.mode=0;removePanel(state);report(state,"Auto-hide: new forecast or changed charging-stop count");}
             // Native results are never cleared automatically through generic close or Back.
         }
         if(fresh&&state.previousSession>=0&&state.previousSession!=forecast.session)resetSearch(state);
@@ -362,9 +368,12 @@ final class NatMinimalEv {
         if(!c.mapControls){clear(a);return;}
         Rect bounds=new Rect();if(!host.getGlobalVisibleRect(bounds)){clear(a);return;}
         int size=dp(a,48),gap=dp(a,7),edge=dp(a,12);
-        NatToolbarLayout.Slot chosen=NatToolbarLayout.choose(c.mapControls,routeControls,
-                bounds.left,bounds.top,bounds.right,bounds.bottom,size,gap,edge,
-                q->free(views,new Rect(q.x,q.y,q.x+q.w,q.y+q.h),host));
+        NatToolbarLayout.Slot reserved=route&&!nativeCurrent(views)?NatToolbarLayout.currentBattery(bounds.left,bounds.top,bounds.right,bounds.bottom,dp(a,142),dp(a,58),edge,
+                q->free(views,new Rect(q.x,q.y,q.x+q.w,q.y+q.h),host)):null;
+        final Rect batterySlot=reserved==null?null:new Rect(reserved.x,reserved.y,reserved.x+reserved.w,reserved.y+reserved.h);
+        NatToolbarLayout.Slot chosen=NatToolbarLayout.choosePreferred(c.mapControls,routeControls,
+                bounds.left,bounds.top,bounds.right,bounds.bottom,size,gap,edge,true,
+                q->{Rect r=new Rect(q.x,q.y,q.x+q.w,q.y+q.h);return (batterySlot==null||!Rect.intersects(batterySlot,r))&&free(views,r,host);});
         if(chosen==null){clear(a);report(state,"Toolbar unavailable: native controls protected");return;}
         Rect slot=new Rect(chosen.x,chosen.y,chosen.x+chosen.w,chosen.y+chosen.h);
         boolean vertical=chosen.vertical;
@@ -388,10 +397,11 @@ final class NatMinimalEv {
         for(int i=0;i<chosen.count;i++){TextView t=(TextView)bar.getChildAt(i);if(t.getCurrentTextColor()!=(activeKeys[i]||dark?Color.WHITE:0xff263238)||t.isSelected()!=activeKeys[i]||t.getBackground()==null){style(t,activeKeys[i],dark,size/2);t.setSelected(activeKeys[i]);}}
         if(!routeControls)return;
         NatPrediction.Snapshot matched=NatNavigationCard.matchesForecast(root,forecast)?forecast:null;
-        showPanel(a,host,state,views,bounds,slot,dark,matched);
         NatLiveEnergy.Reading live=NatPrediction.liveReading();
-        if(route){mini(a,host,state,views,bounds,slot,dark,true,Double.isFinite(live.soc)?Math.round(live.soc)+"%":"—");
-            mini(a,host,state,views,bounds,slot,dark,false,matched==null?"—":number(matched.remainingKwh,"kWh"));}
+        if(route){mini(a,host,state,views,bounds,slot,dark,true,Double.isFinite(live.soc)?Math.round(live.soc)+"%":"—");}
+        else removeMini(state,true);
+        showPanel(a,host,state,views,bounds,slot,dark,matched);
+        if(route){mini(a,host,state,views,bounds,slot,dark,false,matched==null?"—":number(matched.remainingKwh,"kWh"));}
         else{removeMini(state,true);removeMini(state,false);}
     }
 }

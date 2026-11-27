@@ -278,6 +278,14 @@ public class TestNatToolbar {
   check(NatToolbarLayout.choose(true,true,0,0,900,490,48,7,-1,q->true)==null);
   check(NatToolbarLayout.choose(true,true,0,0,900,490,48,7,12,null)==null);
   check(!NatToolbarLayout.hasDiagnostics(0));check(NatToolbarLayout.diagnosticIndex(3)==-1);
+  a=NatToolbarLayout.choosePreferred(true,true,0,0,900,490,48,7,12,true,q->true);check(a.x==12&&a.count==5&&a.vertical);
+  a=NatToolbarLayout.choosePreferred(true,true,0,0,900,490,48,7,12,true,q->q.x>500);check(a.x==840&&a.count==5);
+  a=NatToolbarLayout.currentBattery(0,0,900,490,142,58,12,q->true);check(a.x==12&&a.y==12&&a.w==142&&a.h==58);
+  check(NatToolbarLayout.currentBattery(0,0,900,490,142,58,12,q->false)==null);
+  check(NatToolbarLayout.currentBattery(0,0,100,490,142,58,12,q->true)==null);
+  check(NatToolbarLayout.currentBattery(0,0,900,60,142,58,12,q->true)==null);
+  a=NatToolbarLayout.currentBattery(100,50,1000,540,142,58,12,q->true);check(a.x==112&&a.y==62);
+  a=NatToolbarLayout.choosePreferred(true,false,0,0,900,490,48,7,12,true,q->true);check(a.count==1&&a.x==12);
   System.out.println("PASS: "+n+" NAT V2.0.4 toolbar layout cases");
  }
 }

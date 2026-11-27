@@ -308,7 +308,7 @@ final class NatNavigationCard {
         // Keep a single right-aligned card inside the native summary. A verified
         // suffix can share its cell; the distance/ETA prefix and controls cannot.
         if (inside && regions != null && !hasDrawable(tv)) {
-            for (int size : new int[]{160,144,128,112}) {
+            for (int size : new int[]{160}) {
                 int w=Math.round(size*d), h=Math.round(size*.50f*d);
                 for (NatBatteryPlacement.Box cell : NatBatteryPlacement.rightCell(box(panelRect),box(anchor),regions[1]==null?null:box(regions[1]),w,h,gap)) {
                     Rect candidate=new Rect(cell.x,cell.y,cell.x+cell.w,cell.y+cell.h);
