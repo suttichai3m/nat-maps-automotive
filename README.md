@@ -21,6 +21,12 @@
 | Live Motion / Turning | Vehicle motion and turn indication using fresh GPS/vehicle data | Source integrated; actual head-unit behavior unverified. |
 | GPS and route continuity | Preserve existing navigation | No intentional replacement of existing route logic; regression verification pending. |
 
+## Luxury Executive dashboard
+
+- The right-hand vehicle scene uses a resolution-independent metallic-blue Seal-inspired side profile, gradient studio lighting, defined wheels and a subtle road animation. It is an illustration, not a camera view or ADAS.
+- The existing 75:25 layout, manual Full Map switch, metric labels and their data sources, and footer actions are preserved. Parked/moving/turning status follows the existing fresh speed and GPS heading trend.
+- No external image download or new permission is required. Visual verification on BYD remains pending.
+
 ## Build and acceptance
 
 - Use only the `map-original` branch for this candidate.

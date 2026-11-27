@@ -165,8 +165,8 @@ final class NatSplitScreen {
  }
  private static int fg(State s){return s.dark?0xffedf4f7:0xff263238;}
  private static int muted(State s){return s.dark?0xffb4c6d1:0xff546a74;}
- private static int card(State s){return s.dark?0xff1d303d:0xfff8fbfc;}
- private static int surface(State s){return s.dark?0xff101e2a:0xffe8f0f3;}
+ private static int card(State s){return s.dark?0xff192b3b:0xfff8fbfc;}
+ private static int surface(State s){return s.dark?0xff101b29:0xffe8f0f3;}
  private static int green(State s){return s.dark?0xff83e5b4:0xff136b45;}
  private static int blue(State s){return s.dark?0xffa3ccff:0xff174c90;}
  private static GradientDrawable bg(Context c,int color,int edge,int radius){
@@ -181,7 +181,7 @@ final class NatSplitScreen {
  private static void add(LinearLayout host,View child,int height){host.addView(child,new LinearLayout.LayoutParams(-1,height));}
  private static TextView metric(Activity a,State s,LinearLayout row,String name,int accent,boolean battery,boolean arrival){
   LinearLayout cell=vertical(a);cell.setGravity(Gravity.CENTER);cell.setPadding(dp(a,4),dp(a,5),dp(a,4),dp(a,5));
-  cell.setBackground(bg(a,card(s),battery?accent:0,9));
+  cell.setBackground(bg(a,card(s),battery?accent:(s.dark?0xff2c4154:0xffd4dfe6),11));
   LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-1,1);lp.setMargins(dp(a,2),dp(a,2),dp(a,2),dp(a,2));row.addView(cell,lp);
   TextView label=text(a,name,battery?12:11,muted(s),false);label.setMaxLines(2);add(cell,label,-2);
   TextView value=text(a,"—",battery?30:17,accent,true);value.setSingleLine(true);value.setAutoSizeTextTypeUniformWithConfiguration(battery?24:12,battery?34:19,1,android.util.TypedValue.COMPLEX_UNIT_SP);
@@ -202,7 +202,12 @@ final class NatSplitScreen {
   add(panel,text(a,"BYD SEAL  •  NAT V3.2",14,fg(s),true),dp(a,24));
   s.road=new Road(a);s.road.dark=s.dark;
   int roadH=Math.min(dp(a,144),Math.max(dp(a,56),mapH/4));add(panel,s.road,roadH);
-  s.heading=text(a,"—",11,muted(s),false);add(panel,s.heading,dp(a,18));
+  s.heading=text(a,"—",11,muted(s),true);
+  s.heading.setSingleLine(true);
+  s.heading.setAutoSizeTextTypeUniformWithConfiguration(9,11,1,android.util.TypedValue.COMPLEX_UNIT_SP);
+  LinearLayout.LayoutParams headingParams=new LinearLayout.LayoutParams(-1,dp(a,20));
+  headingParams.setMargins(dp(a,4),dp(a,1),dp(a,4),dp(a,2));
+  panel.addView(s.heading,headingParams);
   LinearLayout batteries=row(a);add(panel,batteries,dp(a,84));
   s.soc=metric(a,s,batteries,"แบตเตอรี่ปัจจุบัน",green(s),true,false);
   s.arrival=metric(a,s,batteries,"แบตเมื่อถึงปลายทาง",blue(s),true,true);
@@ -255,7 +260,12 @@ final class NatSplitScreen {
   set(s.arrivalLabel,match?"แบตเมื่อถึงปลายทาง":"แบตเมื่อถึง (Maps)");
   s.arrival.setTextColor(arrival!=null&&arrival<20?(s.dark?0xffff9b9b:0xffb91c1c):blue(s));
   set(s.speed,fmt(speed,"km/h"));
-  set(s.heading,!Double.isFinite(speed)?"ข้อมูลความเร็ว —":speed<=1?"จอดนิ่ง":!Double.isFinite(turn)?"ทิศทาง —":turn<-3?"แนวโน้มเลี้ยวซ้าย":turn>3?"แนวโน้มเลี้ยวขวา":"แนวโน้มขับตรง");
+  String motion=!Double.isFinite(speed)?"ข้อมูลความเร็ว —":speed<=1?"จอดนิ่ง  •  PARKED":!Double.isFinite(turn)?"เคลื่อนที่  •  ทิศทาง —":turn<-3?"แนวโน้มเลี้ยวซ้าย":turn>3?"แนวโน้มเลี้ยวขวา":"แนวโน้มขับตรง";
+  int motionColor=!Double.isFinite(speed)?muted(s):speed<=1?green(s):Double.isFinite(turn)&&Math.abs(turn)>3?(s.dark?0xffffc881:0xff945313):blue(s);
+  if(!motion.contentEquals(s.heading.getText())||s.heading.getCurrentTextColor()!=motionColor||s.heading.getBackground()==null){
+   set(s.heading,motion);s.heading.setTextColor(motionColor);
+   s.heading.setBackground(bg(a,s.dark?0xff1a2c3b:0xfff8fbfc,s.dark?0xff344a5d:0xffcddbe4,10));
+  }
   set(s.power,"—"); // No validated dashboard power signal.
   set(s.remaining,fmt(match?f.remainingKwh:Double.NaN,"kWh"));set(s.rate,fmt(match?live.rate:Double.NaN,"kWh/100km"));
   set(s.distance,fmt(NatNavigationCard.verifiedKm(root),"km"));
@@ -284,23 +294,74 @@ final class NatSplitScreen {
   public void setAlpha(int a){}public void setColorFilter(ColorFilter f){}public int getOpacity(){return PixelFormat.TRANSLUCENT;}
  }
  private static final class Road extends View {
-  final Paint p=new Paint(3);final Bitmap car;
+  // Resolution-independent, original stylized Seal side profile. No tiny bitmap,
+  // network dependency, camera feed or simulated ADAS information.
+  final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+  final Path body=new Path(),glass=new Path(),hood=new Path(),lower=new Path(),belt=new Path(),frontLamp=new Path(),rearLamp=new Path(),sill=new Path(),mirror=new Path();
+  final Shader bodyPaint=new LinearGradient(0,27,0,91,new int[]{0xffa2d0fa,0xff477eae,0xff244d78,0xff172e4c},new float[]{0,.32f,.68f,1},Shader.TileMode.CLAMP);
+  final Shader glassPaint=new LinearGradient(0,27,0,57,0xff39536d,0xff101b2b,Shader.TileMode.CLAMP);
+  final Shader chrome=new LinearGradient(0,-16,0,16,0xffc4d5e4,0xff506174,Shader.TileMode.CLAMP);
+  final Shader shadow=new RadialGradient(0,0,1,new int[]{0x99000000,0x00000000},null,Shader.TileMode.CLAMP);
+  final Shader nightStudio=new LinearGradient(0,0,0,112,new int[]{0xff132235,0xff21394d,0xff101b29},null,Shader.TileMode.CLAMP);
+  final Shader dayStudio=new LinearGradient(0,0,0,112,new int[]{0xffe7f0f5,0xffcbdde8,0xffb6cbd7},null,Shader.TileMode.CLAMP);
   double speed=Double.NaN,turn=Double.NaN;boolean running,dark;long last,lastData;float phase;
-  Road(Context c){super(c);setContentDescription("Owner BYD Seal on illustrative road, not ADAS");Bitmap b=null;
-   try{byte[] bytes=android.util.Base64.decode("UklGRgoFAABXRUJQVlA4WAoAAAAQAAAAdwAAKgAAQUxQSA4CAAABkARJtmlb69m2vm3btm3btm1jZNu2bdu2ru/6uBvv7L3mETEBYMyAiLS5ilVt2K1nV9etarmuni8SNO2WWGb0mu0nrt99+ubzbztyWlyb3907OKdDsbRhenEPLTxw8yM05LsLm8Y2zR2kB988HZbcN6ORHaZTHcOUC6ow/8onVPHWwJRKRbU/4UBln07MpEzWMQ9Q7Y/zC6rgV275e1T/y7pKUcbyS2xz2IF6dF5bXCPCzRj+eVrOPPIBdep4tKRhUrJl7b365ifUsOPFpq75IpIj9j5q/PeVle2zBUtym426/3V5QdNsHhLK/dbe/x/OTisotAup/DIjJZ//NTIQH/UI4Am7QwjiySoerNRPSEHLhjyMrC9pQfw8KclFkY/UID7tFw0AFX/Sg3ijvT/UsVKE2AvaO2laDv2Q5lMe04h6GDeVqI+FphFlazSMKBzTiao1Xala2IaqqUFriBoGETtp6gwQecxmd9LTFgBiitdo2mPUZ1pMlYA9l5Jfuyv5ceT/LsMkaP7x6qXgsyuXBC/u27adf9t9OabVZT2A122HhHHpM/FnThchGhYoGuDrLZrltIzDJTxAMPNRoW0+oH7ifrGHqUA8ZKKJ72Ea0GHkpB8CtjogtfYDjjdnq4AmSxzmW+QuB1J17tFz0rSZk9oUSxMC2gzq8ZTxaXujICA1c+fuE2eu2TirCPACVlA4INYCAAAwEgCdASp4ACsAPyV4s1SuJqQjMBVbUcAkiUAYti/ycgldEFcjGu+WTzjrYEVQldNwHpEnqyJuBi+J1mqYo/CYO0rkaGZPaEdjrDCvJGfQhayHCKOHrn0QyW6Y2vKL458uqUnSo+mO5qDh/XnGzVdsH/hjj7nBv1QObMtOZ/NyKjIgmOEgavXSI2O/ixxTg/68EP62PlW1bksAAP70I8srI93QU5FgHJlPI0DMnw1vA+aKkJStJJW76HskIXOabl3KlV8N3nCuIi47oINGbCLzEBaBT36kqCRtyS99YeVJOc9IZ0ptY2lep4weUyn3j8ogl7K34ALBoYj19Gsj5D0YDBcGdWc1p3tApgb546GeTg/kNdUxZq6Fsz4PUv0DrytC5MXjRv0qymOvIlZI85ynUbB2aiYEmu8qpnzHAMu5JWngET8cWUVfXyN52qhd/LIk/erR2i4e7PMSX4hW318+avtS3oz6ep4mZvx7Yay0KnY2DgAJOinuM6KuDzKyxcp6PknWTgZc3DH9YdWCUjFfgP5GgiJGszmarBoESSpdbAcDC3A15MFOvF20kYwcOK6TiL8ZguKjqqzN9ppmbLy/5fnC7xQ79oVojn/nb6k43NvxY5k0VoV7ctYi/TAMLCgKCiJnAjaEhU6F4bNvS1UTrllVWWkXV3ouB07rrWmQmrfUhztSQ1oQjmYrpca6ECfL+03mnlvrfyo3DwZG52PglEhvIbxr6CMpstb5gpdsTZVpQawQKhRyDdrAdhilh2DlNHFQI5s07sjbmdxEiGPq9i/WHvilzvGFkGFMti/PxF05oQeHEv75ofJcp0RUVMFLAEVBB6LO9fokk1bSjrOcHyDfvL+/xiWCHOdXifYdGqQDTNq39vnNyjxghOU4OZ6dlvJdKZEwLDK5MCwpYnGmsZNZ30JqxTb6zplcm4sonEiB/2hCuUUVK8Our5OtxUPmPFQAAAA=",android.util.Base64.DEFAULT);b=BitmapFactory.decodeByteArray(bytes,0,bytes.length);}catch(RuntimeException ignored){}car=b;}
-  void color(int c){p.setColor(c);p.setStyle(Paint.Style.FILL);}
+  Road(Context c){
+   super(c);setContentDescription("Stylized BYD Seal side profile on decorative road; GPS heading trend only, not ADAS");
+   // Low bonnet, long wheelbase, fastback roof, short rear deck.
+   body.moveTo(12,76);body.cubicTo(11,66,16,57,24,54);body.cubicTo(32,49,47,47,59,43);
+   body.cubicTo(76,28,95,22,121,22);body.cubicTo(147,22,164,32,184,46);
+   body.cubicTo(197,51,217,52,228,60);body.cubicTo(237,66,238,75,233,84);
+   body.lineTo(221,88);body.cubicTo(220,68,191,65,184,88);body.lineTo(65,88);
+   body.cubicTo(61,66,31,66,27,88);body.lineTo(16,85);body.close();
+   glass.moveTo(64,44);glass.cubicTo(80,32,99,27,121,27);glass.cubicTo(144,27,160,36,174,46);
+   glass.lineTo(161,49);glass.lineTo(78,49);glass.close();
+   hood.moveTo(16,62);hood.cubicTo(56,51,107,53,164,53);hood.cubicTo(195,52,220,57,232,65);
+   lower.moveTo(16,77);lower.lineTo(27,80);lower.cubicTo(35,62,59,65,67,83);lower.lineTo(183,83);
+   lower.cubicTo(192,64,215,66,223,80);lower.lineTo(235,76);
+   belt.moveTo(65,60);belt.cubicTo(105,56,145,56,184,60);
+   sill.moveTo(69,82);sill.cubicTo(110,85,148,85,181,81);
+   frontLamp.moveTo(217,59);frontLamp.lineTo(231,64);frontLamp.lineTo(230,67);frontLamp.lineTo(215,64);frontLamp.close();
+   rearLamp.moveTo(15,59);rearLamp.lineTo(33,56);rearLamp.lineTo(32,60);rearLamp.lineTo(15,63);rearLamp.close();
+   mirror.moveTo(165,47);mirror.cubicTo(171,44,181,44,181,48);mirror.lineTo(174,52);mirror.lineTo(166,52);mirror.close();
+  }
+  void color(int c){p.setShader(null);p.setColor(c);p.setStyle(Paint.Style.FILL);}
+  void fill(Canvas c,Path path,Shader shader){color(0xffffffff);p.setShader(shader);c.drawPath(path,p);p.setShader(null);}
+  void stroke(Canvas c,Path path,int col,float width){color(col);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(width);p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeJoin(Paint.Join.ROUND);c.drawPath(path,p);p.setStyle(Paint.Style.FILL);}
+  void wheel(Canvas c,float x,float y,float spin){
+   c.save();c.translate(x,y);color(0xff0a1019);c.drawCircle(0,0,18,p);
+   color(0xff273342);c.drawCircle(0,0,14.5f,p);
+   color(0xffffffff);p.setShader(chrome);c.drawCircle(0,0,12.4f,p);p.setShader(null);
+   color(0xff142233);c.drawCircle(0,0,10.5f,p);
+   c.rotate(spin);
+   for(int i=0;i<5;i++){c.save();c.rotate(i*72);color(0xffb4c6d6);c.drawRoundRect(-1.8f,-11,1.8f,-3,1.3f,1.3f,p);c.restore();}
+   color(0xff92a8bd);c.drawCircle(0,0,3.7f,p);color(0xff314357);c.drawCircle(0,0,1.7f,p);c.restore();
+  }
   protected void onDraw(Canvas c){
    super.onDraw(c);float w=getWidth(),h=getHeight();if(w<=0||h<=0)return;
    long now=SystemClock.elapsedRealtime();boolean move=running&&NatSplitMath.fresh(now,lastData,2000)&&NatSplitMath.moving(speed)&&hasWindowFocus();
-   if(move)phase=(phase+Math.min(100,Math.max(0,now-last))*((float)speed/100))%42;last=now;
-   c.drawColor(dark?0xff152533:0xffdbe8ed);
-   float x=w/2,y=h*.7f,angle=move&&Double.isFinite(turn)?(float)turn:0;
-   // Decorative side-profile road: curvature indicates measured heading trend, not lanes or ADAS.
-   c.save();c.translate(x,y);c.rotate(angle*.16f);color(dark?0xff293f4d:0xff9eafb8);c.drawRect(-w,-h*.06f,w,h*.55f,p);
-   color(dark?0xff7295aa:0xfff3f7f8);for(float xx=-w-phase;xx<w;xx+=42)c.drawRoundRect(xx,h*.12f,xx+22,h*.14f,1,1,p);
-   if(car!=null){float cw=Math.min(w*.88f,h*2.2f),ch=cw*car.getHeight()/car.getWidth();if(ch>h*.72f){ch=h*.72f;cw=ch*car.getWidth()/car.getHeight();}p.setFilterBitmap(true);p.setAlpha(255);c.drawBitmap(car,null,new RectF(-cw/2,-ch*.88f,cw/2,ch*.12f),p);}
-   else{float k=Math.min(w/180,h/84);c.scale(k,k);color(0xff637fae);c.drawRoundRect(-70,-25,70,5,13,13,p);c.drawRoundRect(-38,-40,42,-10,12,12,p);color(0xff14232b);c.drawCircle(-45,5,11,p);c.drawCircle(45,5,11,p);}
+   if(move)phase=(phase+Math.min(100,Math.max(0,now-last))*((float)speed/100))%360;last=now;
+   float k=Math.min(w/260f,h/112f);
+   c.save();c.translate((w-260*k)/2,(h-112*k)/2);c.scale(k,k);
+   // Paint the studio background across the full view, even at unusual aspect ratios.
+   color(0xffffffff);p.setShader(dark?nightStudio:dayStudio);c.drawRect(-w/k, -h/k,260+w/k,112+h/k,p);p.setShader(null);
+   float angle=move&&Double.isFinite(turn)?(float)turn:0;
+   // Animated dashed line represents motion only; it is not a detected lane.
+   c.save();c.translate(130,99);c.rotate(angle*.12f);
+   color(dark?0xff263d50:0xff9fb6c5);c.drawRoundRect(-160,-5,160,17,4,4,p);
+   color(dark?0xff5b829c:0xffeaf4f8);for(float xx=-180-(phase%44);xx<180;xx+=44)c.drawRoundRect(xx,9,xx+23,10.6f,1,1,p);
    c.restore();
+   c.save();c.translate(130,91);c.scale(104,9);color(0xffffffff);p.setShader(shadow);c.drawCircle(0,0,1,p);p.setShader(null);c.restore();
+   // Subtle body tilt, clamped by the existing GPS trend math; no motion when parked.
+   c.save();c.translate(130,61);c.rotate(angle*.075f);c.translate(-130,-61);c.translate(8,-1);
+   fill(c,body,bodyPaint);stroke(c,body,dark?0xff7d9ebd:0xff375778,1.05f);
+   fill(c,glass,glassPaint);stroke(c,glass,0xff92a8ba,1.0f);
+   color(0xff192d42);c.drawLine(112,27,114,48,p);c.drawLine(147,34,143,48,p);
+   stroke(c,hood,0x88d4eaff,1.1f);stroke(c,lower,0xff233e59,2.1f);stroke(c,belt,0xff95b9d7,.75f);stroke(c,sill,0xff82a8cb,1.15f);
+   color(0xff243e5a);c.drawRoundRect(92,58,108,60,1,1,p);c.drawRoundRect(143,58,159,60,1,1,p);
+   fill(c,mirror,bodyPaint);stroke(c,mirror,0xff344e69,.9f);
+   color(0xffff6974);c.drawPath(rearLamp,p);color(0xffe6f7ff);c.drawPath(frontLamp,p);
+   float spin=move?phase*3:0;wheel(c,46,86,spin);wheel(c,202,86,spin);
+   c.restore();c.restore();
    if(move&&isShown())postInvalidateDelayed(100);
   }
  }
