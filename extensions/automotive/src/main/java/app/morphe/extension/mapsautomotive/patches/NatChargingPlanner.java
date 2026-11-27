@@ -16,7 +16,8 @@ final class NatChargingPlanner {
     static void show(Activity a){
         LinearLayout l=new LinearLayout(a);l.setOrientation(1);l.setPadding(20,16,20,16);
         TextView note=new TextView(a);note.setText("Offline charging estimate • no live connector availability • use while parked");l.addView(note);
-        EditText cap=field(l,"Usable capacity kWh / ความจุ","82.56"),soc=field(l,"Arrival SOC %","20"),target=field(l,"Target SOC %","80"),power=field(l,"Average charging power kW","85"),price=field(l,"Price THB/kWh","6.5");
+        NatPrediction.Snapshot snap=NatPrediction.freshSnapshot();
+        EditText cap=field(l,"Usable capacity kWh / ความจุ",snap==null?"":String.format(Locale.US,"%.2f",snap.capacity)),soc=field(l,"Arrival SOC %",""),target=field(l,"Target SOC %",""),power=field(l,"Average charging power kW",""),price=field(l,"Price THB/kWh","");
         TextView result=new TextView(a);l.addView(result);
         Button calc=new Button(a);calc.setText("Calculate / คำนวณ");l.addView(calc);
         calc.setOnClickListener(v->{try{double k=NatTripMath.charge(val(cap),val(soc),val(target)),p=val(power),r=val(price);if(!Double.isFinite(p)||p<=0||!Double.isFinite(r)||r<0)throw new IllegalArgumentException();result.setText(String.format(Locale.US,"%.1f kWh • %.0f min • THB %.2f\nExcludes loss, queue and charging taper",k,k/p*60,k*r));}catch(RuntimeException e){result.setText("Check input / ตรวจข้อมูล");}});

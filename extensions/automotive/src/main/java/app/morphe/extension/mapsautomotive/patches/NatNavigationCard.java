@@ -159,7 +159,17 @@ final class NatNavigationCard {
     }
     static boolean hasVerifiedRoute(View root) { List<Match> m=matches(root); return m.size()==1 && m.get(0).panel!=null; }
     private static final WeakHashMap<View,Long> VERIFIED=new WeakHashMap<>();
+    private static final WeakHashMap<View,double[]> ROUTES=new WeakHashMap<>();
     static boolean recentlyVerified(View root){Long t=VERIFIED.get(root);return t!=null&&android.os.SystemClock.elapsedRealtime()-t<=2000;}
+    static boolean matchesForecast(View root,NatPrediction.Snapshot f){
+        double[] m=ROUTES.get(root);if(f==null||m==null||!recentlyVerified(root))return false;
+        return NatStabilityMath.matches((int)m[0],m[1],f.google,f.km)||(f.charges>0&&NatStabilityMath.matches((int)m[0],m[1],f.next,f.nextKm));
+    }
+    private static double matchKm(Match match){
+        double km=NatArrivalUi.routeKm(match.anchor.getText());
+        if(!Double.isFinite(km)&&match.panel!=null){ArrayList<TextView> parts=new ArrayList<>();collect(match.panel,parts,0);int count=0;for(TextView part:parts){double k=NatArrivalUi.routeKm(part.getText());if(Double.isFinite(k)){km=k;count++;}}if(count!=1)km=Double.NaN;}
+        return km;
+    }
     static boolean reserves(View root,Rect global){Card c=CARDS.get(root);if(c==null)return false;Rect r=new Rect(c.getBounds());Point offset=new Point();if(!root.getGlobalVisibleRect(new Rect(),offset))return true;r.offset(offset.x,offset.y);return Rect.intersects(r,global);}
     // Measure the actual rendered text, not the width of a match-parent TextView.
     // Layout selection includes ReplacementSpan/emoji widths. Unknown layout fails closed.
@@ -279,7 +289,7 @@ final class NatNavigationCard {
     static void refresh(View root) {
         if (!root.isShown() || !root.hasWindowFocus() || !SafeMode.on(root.getContext(), SafeMode.BYD_BATTERY)) { clear(root); status(root,"inactive"); return; }
         List<Match> matches=matches(root);
-        if(matches.size()==1&&matches.get(0).panel!=null)VERIFIED.put(root,android.os.SystemClock.elapsedRealtime());else VERIFIED.remove(root);
+        if(matches.size()==1&&matches.get(0).panel!=null){VERIFIED.put(root,android.os.SystemClock.elapsedRealtime());ROUTES.put(root,new double[]{matches.get(0).soc,matchKm(matches.get(0))});}else{VERIFIED.remove(root);ROUTES.remove(root);}
         if(matches.size()!=1) { clear(root); status(root,matches.isEmpty()?"no verified summary":"ambiguous summaries"); return; }
         Match match=matches.get(0); TextView tv=match.anchor; int soc=match.soc;
         Rect visible=new Rect(), viewport=new Rect(); Point offset=new Point();
@@ -338,8 +348,7 @@ final class NatNavigationCard {
         }
         syncIcon(c,match,regions[0]);
         // A next-leg summary must never be silently relabelled as the final destination.
-        double km=NatArrivalUi.routeKm(tv.getText());
-        if(!Double.isFinite(km)&&match.panel!=null){ArrayList<TextView> parts=new ArrayList<>();collect(match.panel,parts,0);int count=0;for(TextView part:parts){double k=NatArrivalUi.routeKm(part.getText());if(Double.isFinite(k)){km=k;count++;}}if(count!=1)km=Double.NaN;}
+        double km=matchKm(match);
         NatPrediction.Snapshot f=NatPrediction.freshSnapshot();
         boolean finalKnown=f!=null&&NatStabilityMath.matches(soc,km,f.google,f.km);
         boolean nextKnown=f!=null&&f.charges>0&&NatStabilityMath.matches(soc,km,f.next,f.nextKm)&&!finalKnown;

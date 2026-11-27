@@ -173,13 +173,14 @@ final class NatMinimalEv {
         }
         if(slot==null){removePanel(s);s.mode=0;toast(a,"ไม่พบพื้นที่ปลอดภัย ใช้เมนู BYD Battery Settings");report(s,"Panel unavailable: native controls protected");return;}
         NatLiveEnergy.Reading live=NatPrediction.liveReading();
-        double observed=live.net,cost=NatStabilityMath.cost(observed,tariff(a));
-        String power=number(live.power,"kW"), actualRate=number(live.rate,"kWh/100 km"),increase=number(live.increase,"kWh"),coverage=number(live.km,"km");
-        String powerState=!Double.isFinite(live.power)?"ไม่มีข้อมูล":live.power>0?"แบตจ่ายพลังงาน":live.power<0?"พลังงานแบตเพิ่ม":"การเปลี่ยนแปลงสุทธิเป็นศูนย์";
+        double observed=f==null?Double.NaN:live.net,cost=NatStabilityMath.cost(observed,tariff(a));
+        double displayedPower=f==null?Double.NaN:live.power;
+        String power=number(displayedPower,"kW"), actualRate=number(f==null?Double.NaN:live.rate,"kWh/100 km"),increase=number(f==null?Double.NaN:live.increase,"kWh"),coverage=number(f==null?Double.NaN:live.km,"km");
+        String powerState=!Double.isFinite(displayedPower)?"ไม่มีข้อมูล":displayedPower>0?"แบตจ่ายพลังงาน":displayedPower<0?"พลังงานแบตเพิ่ม":"การเปลี่ยนแปลงสุทธิเป็นศูนย์";
         String remaining=f==null?"—":number(f.remainingKwh,"kWh");
         String rate=f==null?"—":number(NatStabilityMath.rate(f.remainingKwh,f.km),"kWh/100 km");
         String used=number(observed,"kWh"),money=number(cost,"THB");
-        String plan=f==null?"ไม่มี forecast สดจาก Maps":f.charges==0?"ยังไม่มีจุดชาร์จใน forecast":("แผนจาก Maps (ไม่มีชื่อสถานี)"+f.plan);
+        String plan=f==null?"ไม่มี forecast สดที่ตรงกับเส้นทาง":f.charges==0?"ยังไม่มีจุดชาร์จใน forecast":("แผนจาก Maps (ไม่มีชื่อสถานี)"+f.plan);
         String arrival=f==null?"—":f.google+"%";
         String signature=s.mode+"|"+dark+"|"+remaining+"|"+rate+"|"+used+"|"+money+"|"+plan+"|"+arrival+"|"+power+"|"+actualRate+"|"+increase+"|"+coverage+"|"+powerState+"|"+slot.toShortString();
         if(signature.equals(s.rendered)&&s.sheet()!=null)return;
@@ -193,8 +194,8 @@ final class NatMinimalEv {
         if(s.mode==1){
             content.addView(line(a,"LIVE POWER • ค่าเฉลี่ยช่วงตัวอย่าง",12,muted));
             content.addView(line(a,power+" · "+powerState,20,fg));
-            if(Double.isFinite(live.power)){
-                android.widget.ProgressBar gauge=new android.widget.ProgressBar(a,null,android.R.attr.progressBarStyleHorizontal);gauge.setTag(OWN);gauge.setMax(500);gauge.setProgress((int)Math.round(live.power+250));content.addView(gauge,new android.widget.LinearLayout.LayoutParams(-1,dp(a,12)));
+            if(Double.isFinite(displayedPower)){
+                android.widget.ProgressBar gauge=new android.widget.ProgressBar(a,null,android.R.attr.progressBarStyleHorizontal);gauge.setTag(OWN);gauge.setMax(500);gauge.setProgress((int)Math.round(displayedPower+250));content.addView(gauge,new android.widget.LinearLayout.LayoutParams(-1,dp(a,12)));
                 content.addView(line(a,"− เพิ่มพลังงาน     0     + จ่ายพลังงาน (kW)",10,muted));
             }
             String[] labels={"พลังงานสุทธิที่สังเกตได้","พลังงานที่ต้องใช้อีก","สิ้นเปลืองจากช่วงที่มีเลขไมล์","พลังงานเพิ่มขณะเคลื่อนที่","สิ้นเปลืองตาม forecast","ค่าไฟประมาณการ"};
@@ -204,7 +205,7 @@ final class NatMinimalEv {
                 for(int j=i;j<i+2;j++){android.widget.LinearLayout cell=column(a);cell.setPadding(dp(a,5),dp(a,3),dp(a,5),dp(a,3));cell.addView(line(a,labels[j],11,muted));cell.addView(line(a,values[j],19,fg));row.addView(cell,new android.widget.LinearLayout.LayoutParams(0,-2,1));}
                 content.addView(row);
             }
-            content.addView(line(a,f==null?"ไม่มี forecast สด":f.charges>0?"ประมาณจากพลังงานและจุดชาร์จขั้นต่ำใน Maps":"ประมาณจาก Wh ของ BYD และ Maps",11,muted));
+            content.addView(line(a,f==null?"ไม่มี forecast สดที่ตรงกับเส้นทาง":f.charges>0?"ประมาณจากพลังงานและจุดชาร์จขั้นต่ำใน Maps":"ประมาณจาก Wh ของ BYD และ Maps",11,muted));
             content.addView(line(a,"ช่วงที่มีเลขไมล์: "+coverage+" • ไม่ใช่ยอดทั้งเที่ยว • พลังงานเพิ่มไม่ใช่ค่า Regen ที่ยืนยันแล้ว",11,muted));
             android.widget.Button set=new android.widget.Button(a);set.setTag(OWN);set.setText("ตั้งค่าไฟ");set.setOnClickListener(v->editTariff(a,s));content.addView(set);
         }else{
@@ -286,10 +287,11 @@ final class NatMinimalEv {
         state.left=slot.left;state.top=slot.top;
         boolean[] activeKeys={active,state.mode==1,state.mode==2,false};
         for(int i=0;i<4;i++){TextView t=(TextView)bar.getChildAt(i);if(t.getCurrentTextColor()!=(activeKeys[i]||dark?Color.WHITE:0xff263238)||t.isSelected()!=activeKeys[i]||t.getBackground()==null){style(t,activeKeys[i],dark,size/2);t.setSelected(activeKeys[i]);}}
-        showPanel(a,host,state,views,bounds,slot,dark,forecast);
+        NatPrediction.Snapshot matched=NatNavigationCard.matchesForecast(root,forecast)?forecast:null;
+        showPanel(a,host,state,views,bounds,slot,dark,matched);
         NatLiveEnergy.Reading live=NatPrediction.liveReading();
         if(route){mini(a,host,state,views,bounds,slot,dark,true,Double.isFinite(live.soc)?Math.round(live.soc)+"%":"—");
-            mini(a,host,state,views,bounds,slot,dark,false,forecast==null?"—":number(forecast.remainingKwh,"kWh"));}
+            mini(a,host,state,views,bounds,slot,dark,false,matched==null?"—":number(matched.remainingKwh,"kWh"));}
         else{removeMini(state,true);removeMini(state,false);}
     }
 }

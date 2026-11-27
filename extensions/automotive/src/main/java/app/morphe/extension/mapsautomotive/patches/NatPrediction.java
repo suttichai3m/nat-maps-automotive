@@ -14,7 +14,7 @@ final class NatPrediction {
     static synchronized void observe(BydDriveLog.Sample s){
         live.accept(s.elapsed,s.soc,s.energyWh,s.mileage01km,s.speedKmh,freshSnapshot()!=null);
     }
-    static synchronized NatLiveEnergy.Reading liveReading(){return live.read(SystemClock.elapsedRealtime(),freshSnapshot()!=null);}
+    static synchronized NatLiveEnergy.Reading liveReading(){return BydBatteryPatch.isActive()?live.read(SystemClock.elapsedRealtime(),freshSnapshot()!=null):new NatLiveEnergy.Reading(Double.NaN,Double.NaN,Double.NaN,Double.NaN,Double.NaN,Double.NaN,0);}
     static synchronized double observedKwh(){return liveReading().net;}
     static Snapshot freshSnapshot(){Snapshot s=snapshot;return s!=null&&BydBatteryPatch.isActive()&&NatStabilityMath.fresh(SystemClock.elapsedRealtime(),s.at)?s:null;}
     static synchronized void clear(){snapshot=null;live.endRoute();}
@@ -50,7 +50,7 @@ final class NatPrediction {
         if(s==null || SystemClock.elapsedRealtime()-s.at>30000 || !BydBatteryPatch.isActive() || s.charges!=0 || s.google!=google || !Double.isFinite(km) || Math.abs(s.km-km)>Math.max(0.2,km*0.01)) return "";
         try {
             SharedPreferences p=context.getSharedPreferences("nat_prediction",0);
-            double rate=Double.parseDouble(p.getString("rate","17").replace(',','.'));
+            double rate=Double.parseDouble(p.getString("rate","").replace(',','.'));
             double cap=Double.parseDouble(p.getString("capacity",String.valueOf(s.capacity)).replace(',','.'));
             double n=NatPredictionMath.arrival(s.soc,s.km,rate,cap);
             return n<0 ? "NAT est. "+Math.round(n)+"%" : "NAT est. "+Math.round(n)+"%";
@@ -69,9 +69,9 @@ final class NatPrediction {
         TextView note=new TextView(a); note.setText(live?"ข้อมูลจาก forecast ล่าสุด ณ เวลาเปิดหน้าต่าง / ตรวจสอบเส้นทางก่อนใช้":"ไม่มี forecast สด — กรอกข้อมูลเอง (ไม่ใช่ข้อมูลสด)"); l.addView(note); if(live && s.charges==0) { TextView estimate=new TextView(a); double energy=s.remainingKwh; if(energy>=0&&s.km>0) estimate.setText(String.format(Locale.US,"SOC-based estimate: %.1f kWh • %.1f kWh/100 km",energy,energy*100/s.km)); else estimate.setText("Energy estimate unavailable"); l.addView(estimate); } if(live && s.charges>0) { TextView plan=new TextView(a); plan.setText("แผนจาก Maps (ไม่มีชื่อสถานีใน forecast)"+s.plan+"\nปลายทาง: "+(s.google+"%")); l.addView(plan); }
         EditText soc=field(l,"แบตปัจจุบัน %",live?fmt(s.soc):"");
         EditText km=field(l,"ระยะทางคงเหลือ กม.",live?fmt(s.km):"");
-        EditText cap=field(l,"ความจุใช้งาน kWh (ปรับได้)",p.getString("capacity",live?fmt(s.capacity):"82.56"));
-        EditText rate=field(l,"อัตรากินไฟ kWh/100 กม. (ค่าเริ่มต้นสมมติ)",p.getString("rate","17"));
-        EditText reserve=field(l,"แบตสำรอง %",p.getString("reserve","20"));
+        EditText cap=field(l,"ความจุใช้งาน kWh (ปรับได้)",p.getString("capacity",live?fmt(s.capacity):""));
+        EditText rate=field(l,"อัตรากินไฟ kWh/100 กม. (กรอกเอง)",p.getString("rate",""));
+        EditText reserve=field(l,"แบตสำรอง %",p.getString("reserve",""));
         EditText google=field(l,"Google Estimate % (ไม่บังคับ)",live?String.valueOf(s.google):"");
         CheckBox charge=new CheckBox(a); charge.setText("มีแผนชาร์จระหว่างทาง"); charge.setChecked(live&&s.charges>0); l.addView(charge);
         TextView result=new TextView(a); result.setTextSize(20); l.addView(result);
