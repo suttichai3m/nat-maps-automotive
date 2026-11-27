@@ -71,7 +71,8 @@ final class NatSystemDiagnostics {
     private static final class Session {
         final Activity host;final Context app;final ArrayList<Sample> history=new ArrayList<>();
         final ArrayList<Sat> sats=new ArrayList<>();
-        AlertDialog dialog;TextView resources,gps,byd,notes,historyText;Plot sky,graph;Button pause;
+        AlertDialog dialog;TextView resources,gps,byd,notes,historyText,cpuMetric,pssMetric,ramMetric,gpsMetric,satMetric,accuracyMetric,monitorStatus;Plot sky,graph;Button pause;ProgressBar memoryBar;
+        boolean dark;int fg,muted,surface,cardColor,accent;
         LocationManager lm;boolean running,requested,registered,busy,closed;int generation;
         boolean permission;Boolean enabled;long fixAt=-1,gnssAt=-1,previousAt=-1,previousCpu=-1,pssAt=-1;double accuracy=Double.NaN,pss=Double.NaN;boolean hasAccuracy,fixCached;
         int satCount=-1,usedCount=-1;Sample last;String gpsStatus="UNKNOWN";JSONObject bydSnapshot;
@@ -96,24 +97,54 @@ final class NatSystemDiagnostics {
             sample();renderGps();MAIN.postDelayed(this,INTERVAL);
         }};
         Session(Activity a){host=a;app=a.getApplicationContext();}
-        TextView text(LinearLayout box,String s,int sp){TextView t=new TextView(host);t.setText(s);t.setTextSize(sp);t.setPadding(0,dp(4),0,dp(4));box.addView(t);return t;}
+        TextView text(LinearLayout box,String s,int sp){TextView t=new TextView(host);t.setText(s);t.setTextSize(sp);t.setTextColor(fg);t.setPadding(0,dp(4),0,dp(4));box.addView(t);return t;}
         int dp(int v){return Math.round(v*host.getResources().getDisplayMetrics().density);}
-        Button button(LinearLayout box,String name,Runnable action){Button b=new Button(host);b.setText(name);box.addView(b);b.setOnClickListener(v->{try{action.run();}catch(RuntimeException e){stop();ReportLog.w("NatDiagnostics","Control unavailable",e);}});return b;}
+        Button button(LinearLayout box,String name,Runnable action){Button b=new Button(host);b.setText(name);b.setTextColor(fg);b.setAllCaps(false);b.setMinHeight(dp(48));box.addView(b);b.setOnClickListener(v->{try{action.run();}catch(RuntimeException e){stop();ReportLog.w("NatDiagnostics","Control unavailable",e);}});return b;}
+        android.graphics.drawable.GradientDrawable background(int color,int radius){
+            android.graphics.drawable.GradientDrawable d=new android.graphics.drawable.GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;
+        }
+        LinearLayout card(LinearLayout parent){
+            LinearLayout l=new LinearLayout(host);l.setOrientation(1);l.setPadding(dp(14),dp(12),dp(14),dp(12));l.setBackground(background(cardColor,14));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(10);parent.addView(l,lp);return l;
+        }
+        LinearLayout row(LinearLayout parent){
+            LinearLayout l=new LinearLayout(host);l.setOrientation(0);l.setGravity(android.view.Gravity.CENTER_VERTICAL);parent.addView(l,new LinearLayout.LayoutParams(-1,-2));return l;
+        }
+        TextView metric(LinearLayout row,String label){
+            LinearLayout cell=new LinearLayout(host);cell.setOrientation(1);cell.setPadding(dp(5),dp(4),dp(5),dp(8));row.addView(cell,new LinearLayout.LayoutParams(0,-2,1));
+            TextView cap=text(cell,label,12);cap.setTextColor(muted);
+            TextView v=text(cell,"—",27);v.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);return v;
+        }
+        void heading(LinearLayout box,String label){TextView t=text(box,label,18);t.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);}
         void show(){
-            LinearLayout body=new LinearLayout(host);body.setOrientation(1);body.setPadding(dp(16),dp(8),dp(16),dp(12));
-            text(body,"CPU / RAM — Maps process only (includes NAT)",18);resources=text(body,"Waiting for sample",15);
-            text(body,"Performance history • last 60 s • CPU / PSS",16);graph=new Plot(host,false,this);body.addView(graph,new LinearLayout.LayoutParams(-1,dp(130)));historyText=text(body,"—",12);
-            text(body,"GPS / GNSS Diagnostics",18);gps=text(body,"Waiting for GPS",15);sky=new Plot(host,true,this);body.addView(sky,new LinearLayout.LayoutParams(-1,dp(230)));
-            text(body,"Green = used in fix • Gray = not used • C/N₀ dB-Hz",12);
-            text(body,"BYD SDK / Battery / Maps forecast",18);byd=text(body,"Waiting for sample",15);
-            notes=text(body,"Use while parked • read-only • no coordinates saved • no upload • paused when closed",12);
-            pause=button(body,"Pause",()->{if(running)stop();else start();});
-            button(body,"Copy Diagnostic JSON",()->{try{android.content.ClipboardManager c=host.getSystemService(android.content.ClipboardManager.class);if(c==null)throw new IllegalStateException();c.setPrimaryClip(android.content.ClipData.newPlainText("NAT diagnostic",report().toString(2)));Toast.makeText(host,"Copied",Toast.LENGTH_SHORT).show();}catch(Exception e){Toast.makeText(host,"Copy failed",Toast.LENGTH_SHORT).show();}});
-            button(body,"Export Diagnostic TXT + JSON",this::export);
-            ScrollView scroll=new ScrollView(host);scroll.addView(body);
-            dialog=new AlertDialog.Builder(host).setTitle("NAT V2.0.4 • System Diagnostics").setView(scroll).setPositiveButton("Close",null).create();
+            dark=ColorScheme.nightColors(host);fg=dark?0xffedf4f7:0xff263238;muted=dark?0xffbacbd3:0xff546a74;
+            surface=dark?0xff14232b:0xffedf2ef;cardColor=dark?0xff20303a:0xffffffff;accent=dark?0xff74dba8:0xff137548;
+            LinearLayout body=new LinearLayout(host);body.setOrientation(1);body.setPadding(dp(16),dp(12),dp(16),dp(12));body.setBackgroundColor(surface);
+            LinearLayout header=card(body);heading(header,"NAT SYSTEM DIAGNOSTICS");monitorStatus=text(header,"Waiting for sample",14);monitorStatus.setTextColor(accent);
+            text(header,"V2.0.4 • Maps process including NAT • Use while parked",12).setTextColor(muted);
+            LinearLayout resourcesCard=card(body);heading(resourcesCard,"01  Performance");
+            LinearLayout metrics=row(resourcesCard);cpuMetric=metric(metrics,"APP CPU");pssMetric=metric(metrics,"APP RAM / PSS");
+            ramMetric=metric(row(resourcesCard),"SYSTEM RAM USED");
+            memoryBar=new ProgressBar(host,null,android.R.attr.progressBarStyleHorizontal);memoryBar.setMax(100);memoryBar.setProgressTintList(android.content.res.ColorStateList.valueOf(accent));memoryBar.setVisibility(View.GONE);resourcesCard.addView(memoryBar,new LinearLayout.LayoutParams(-1,dp(10)));
+            resources=text(resourcesCard,"Waiting for sample",13);resources.setTextColor(muted);
+            LinearLayout historyCard=card(body);heading(historyCard,"02  Performance history • 60 s");
+            graph=new Plot(host,false,this);historyCard.addView(graph,new LinearLayout.LayoutParams(-1,dp(150)));historyText=text(historyCard,"—",13);
+            LinearLayout gpsCard=card(body);heading(gpsCard,"03  GPS / GNSS");
+            gpsMetric=metric(row(gpsCard),"POSITION STATUS");gpsMetric.setTextSize(21);
+            LinearLayout gpsMetrics=row(gpsCard);satMetric=metric(gpsMetrics,"SATELLITES SEEN / USED");accuracyMetric=metric(gpsMetrics,"LAST FIX ACCURACY");
+            gps=text(gpsCard,"Waiting for GPS",13);gps.setTextColor(muted);sky=new Plot(host,true,this);gpsCard.addView(sky,new LinearLayout.LayoutParams(-1,dp(230)));
+            text(gpsCard,"Green = used in fix • Gray = not used • C/N₀ dB-Hz",12).setTextColor(muted);
+            LinearLayout carCard=card(body);heading(carCard,"04  BYD SDK / Maps forecast");byd=text(carCard,"Waiting for sample",15);
+            LinearLayout actions=card(body);heading(actions,"05  Diagnostic report");
+            notes=text(actions,"Use while parked • read-only • no coordinates saved • no upload • paused when closed",12);
+            pause=button(actions,"Pause",()->{if(running)stop();else start();});
+            button(actions,"Copy Diagnostic JSON",()->{try{android.content.ClipboardManager c=host.getSystemService(android.content.ClipboardManager.class);if(c==null)throw new IllegalStateException();c.setPrimaryClip(android.content.ClipData.newPlainText("NAT diagnostic",report().toString(2)));Toast.makeText(host,"Copied",Toast.LENGTH_SHORT).show();}catch(Exception e){Toast.makeText(host,"Copy failed",Toast.LENGTH_SHORT).show();}});
+            button(actions,"Export Diagnostic TXT + JSON",this::export);
+            ScrollView scroll=new ScrollView(host);scroll.setFillViewport(true);scroll.addView(body);
+            dialog=new AlertDialog.Builder(host,dark?android.R.style.Theme_DeviceDefault_Dialog_Alert:android.R.style.Theme_DeviceDefault_Light_Dialog_Alert).setTitle("NAT V2.0.4 • System Diagnostics").setView(scroll).setPositiveButton("Close",null).create();
             dialog.setOnDismissListener(d->{closed=true;stop();if(current.get()==this)current.clear();});
-            dialog.show();start();
+            dialog.show();if(dialog.getWindow()!=null){int width=host.getWindow().getDecorView().getWidth();if(width>0)dialog.getWindow().setLayout(Math.min(width,dp(760)),android.view.ViewGroup.LayoutParams.WRAP_CONTENT);}
+            start();
         }
         void start(){
             if(closed||running)return;running=true;generation++;previousAt=previousCpu=-1;pssAt=-1;pss=Double.NaN;last=null;history.clear();fixAt=gnssAt=-1;accuracy=Double.NaN;hasAccuracy=false;fixCached=false;sats.clear();satCount=usedCount=-1;pause.setText("Pause");bydSnapshot=null;resources.setText("Waiting for sample");byd.setText("Waiting for sample");historyText.setText("—");graph.invalidate();
@@ -124,13 +155,13 @@ final class NatSystemDiagnostics {
                     try{acceptFix(lm.getLastKnownLocation(LocationManager.GPS_PROVIDER),true);}catch(RuntimeException ignored){}
                 }
             }catch(RuntimeException e){enabled=null;}
-            notes.setText("Monitoring • GPS diagnostic requests only while this page is open");renderGps();MAIN.postDelayed(tick,500);
+            for(TextView m:new TextView[]{cpuMetric,pssMetric,ramMetric,gpsMetric,satMetric,accuracyMetric})m.setText("—");memoryBar.setVisibility(View.GONE);monitorStatus.setText("● MONITORING");monitorStatus.setTextColor(accent);notes.setText("Monitoring • GPS diagnostic requests only while this page is open");renderGps();MAIN.postDelayed(tick,500);
         }
         void stop(){
             running=false;generation++;MAIN.removeCallbacks(tick);
             if(lm!=null){if(requested)try{lm.removeUpdates(location);}catch(RuntimeException ignored){}if(registered)try{lm.unregisterGnssStatusCallback(gnss);}catch(RuntimeException ignored){}}
             requested=registered=false;
-            if(pause!=null)pause.setText("Resume");if(notes!=null)notes.setText("Paused • displayed values are last samples, not live");if(sky!=null)sky.invalidate();
+            if(pause!=null)pause.setText("Resume");if(notes!=null)notes.setText("Paused • displayed values are last samples, not live");if(sky!=null)sky.invalidate();if(monitorStatus!=null){monitorStatus.setText("PAUSED • last samples");monitorStatus.setTextColor(muted);}if(gpsMetric!=null)gpsMetric.setText("PAUSED");
         }
         void acceptFix(Location l,boolean cached){
             if(l==null||!LocationManager.GPS_PROVIDER.equals(l.getProvider()))return;
@@ -155,7 +186,7 @@ final class NatSystemDiagnostics {
             });
         }
         void renderResources(){
-            if(last==null)return;Sample s=last;
+            if(last==null)return;Sample s=last;cpuMetric.setText(fmt(s.cpu,"%"));pssMetric.setText(fmt(s.pss,"MiB"));ramMetric.setText(Double.isFinite(s.total)?fmt((s.total-s.available)/1024,"GiB")+" / "+fmt(s.total/1024,"GiB"):"—");double percent=NatDiagnosticMath.memoryPercent(s.total,s.available);memoryBar.setVisibility(Double.isFinite(percent)?View.VISIBLE:View.GONE);if(Double.isFinite(percent))memoryBar.setProgress((int)Math.round(percent));
             resources.setText("App CPU: "+fmt(s.cpu,"%")+" (all logical cores normalized)\nApp RAM PSS: "+fmt(s.pss,"MiB")+" • sample age "+age(NatDiagnosticMath.age(SystemClock.elapsedRealtime(),s.pssAt))+"\nSystem RAM: "+fmt(s.total-s.available,"MiB")+" used / "+fmt(s.total,"MiB")+" total\nAvailable: "+fmt(s.available,"MiB")+" • memory pressure: "+(!Double.isFinite(s.total)?"—":s.low?"LOW MEMORY":"normal")+"\nData storage free: "+fmt(s.storage,"MiB")+"\nNetwork: "+s.network);
             double sum=0,max=0;int n=0;for(Sample x:history)if(Double.isFinite(x.cpu)){sum+=x.cpu;max=Math.max(max,x.cpu);n++;}
             historyText.setText("CPU mean / peak: "+fmt(n==0?Double.NaN:sum/n,"%")+" / "+fmt(n==0?Double.NaN:max,"%")+" • "+history.size()+" samples");
@@ -166,7 +197,7 @@ final class NatSystemDiagnostics {
             if(!running)return;long now=SystemClock.elapsedRealtime();
             try{permission=host.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED;enabled=lm==null?null:lm.isProviderEnabled(LocationManager.GPS_PROVIDER);}catch(RuntimeException e){enabled=null;}
             boolean f=NatDiagnosticMath.fresh(now,gnssAt,GNSS_AGE)&&permission&&Boolean.TRUE.equals(enabled);long a=NatDiagnosticMath.age(now,fixAt);
-            gpsStatus=NatDiagnosticMath.gps(permission,enabled,requested,a,hasAccuracy,accuracy,f,satCount,usedCount);
+            gpsStatus=NatDiagnosticMath.gps(permission,enabled,requested,a,hasAccuracy,accuracy,f,satCount,usedCount);gpsMetric.setText(gpsStatus);gpsMetric.setTextColor("FIX".equals(gpsStatus)?accent:fg);satMetric.setText(f?satCount+" / "+usedCount:"—");accuracyMetric.setText(fmt(accuracy,"m"));
             gps.setText(gpsStatus+"\nPermission: "+(permission?"fine location granted":"not granted")+" • GPS provider: "+enabled+"\nGNSS callback: "+(registered?"registered":"unavailable")+"\nSatellites seen / used: "+(f?satCount+" / "+usedCount:"— / —")+"\nLast GPS fix: "+age(a)+(fixCached?" (cached)":"")+"\nAccuracy of last fix: "+fmt(accuracy,"m")+"\nGNSS data age: "+age(NatDiagnosticMath.age(now,gnssAt)));
             sky.invalidate();
         }

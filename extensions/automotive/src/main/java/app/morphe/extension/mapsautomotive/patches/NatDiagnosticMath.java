@@ -10,6 +10,7 @@ final class NatDiagnosticMath {
     static long age(long now,long stamp){return stamp<0||now<stamp?-1:now-stamp;}
     static boolean fresh(long now,long stamp,long max){long a=age(now,stamp);return a>=0&&a<=max;}
     static double usedMemory(long total,long available){return total>0&&available>=0&&available<=total?(total-available)/1048576.0:Double.NaN;}
+    static double memoryPercent(double total,double available){return Double.isFinite(total)&&Double.isFinite(available)&&total>0&&available>=0&&available<=total?100*(total-available)/total:Double.NaN;}
     static double rate(long frames,long slow){return frames>0&&slow>=0&&slow<=frames?100.0*slow/frames:Double.NaN;}
     static String gps(boolean permission,Boolean enabled,boolean requested,long fixAge,boolean hasAccuracy,double accuracy,boolean gnssFresh,int count,int used){
         if(!permission)return "PERMISSION DENIED";

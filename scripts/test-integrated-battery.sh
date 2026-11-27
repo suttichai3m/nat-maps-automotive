@@ -241,6 +241,7 @@ public class TestNatDiagnostics {
   check(gps(true,true,true,-1,false,Double.NaN,true,4,5).equals("UNKNOWN"));
   check(eq(NatDiagnosticMath.skyRadius(90),0));check(eq(NatDiagnosticMath.skyRadius(0),1));check(eq(NatDiagnosticMath.skyRadius(45),.5));check(!NatDiagnosticMath.angle(360,45));check(!NatDiagnosticMath.angle(0,-1));check(NatDiagnosticMath.angle(359,90));
   check(eq(NatDiagnosticMath.rate(100,5),5));check(Double.isNaN(NatDiagnosticMath.rate(0,0)));check(Double.isNaN(NatDiagnosticMath.rate(1,2)));
+  check(eq(NatDiagnosticMath.memoryPercent(8,3),62.5));check(eq(NatDiagnosticMath.memoryPercent(8,8),0));check(eq(NatDiagnosticMath.memoryPercent(8,0),100));check(Double.isNaN(NatDiagnosticMath.memoryPercent(0,0)));check(Double.isNaN(NatDiagnosticMath.memoryPercent(8,9)));check(Double.isNaN(NatDiagnosticMath.memoryPercent(8,-1)));check(Double.isNaN(NatDiagnosticMath.memoryPercent(Double.NaN,1)));check(Double.isNaN(NatDiagnosticMath.memoryPercent(8,Double.POSITIVE_INFINITY)));
   System.out.println("PASS: "+n+" NAT system diagnostics cases");
  }
 }
