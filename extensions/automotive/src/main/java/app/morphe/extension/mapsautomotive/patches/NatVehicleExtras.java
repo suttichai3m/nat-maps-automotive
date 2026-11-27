@@ -30,7 +30,7 @@ final class NatVehicleExtras {
   }catch(Throwable e){ac=null;ReportLog.i("NatVehicleExtras","AC named read unavailable");}}
   String d="—",p="—";
   if(ac!=null){int on=get(state,ac),u=get(unit,ac);
-   if(on==0){d=p="OFF";}else if(on==1&&u==1){d=temperature(get(temp,ac,mainZone));p=temperature(get(temp,ac,deputyZone));}
+   if(on==0){d=p=NatV35Rules.climate(on,u,0);}else if(on==1&&u==1){d=NatV35Rules.climate(on,u,get(temp,ac,mainZone));p=NatV35Rules.climate(on,u,get(temp,ac,deputyZone));}
    if(on!=0&&on!=1&&u==Integer.MIN_VALUE){ac=null;initAc=now;}
   }
   if(tyre==null&&now-initTyre>=30000){initTyre=now;try{
@@ -42,11 +42,10 @@ final class NatVehicleExtras {
   }catch(Throwable e){tyre=null;ReportLog.i("NatVehicleExtras","TPMS named read unavailable");}}
   if(tyreAt<0||now-tyreAt>=10000){
    tyreAt=now;String[] v={"—","—","—","—"};
-   if(tyre!=null)for(int i=0;i<4;i++)if(get(signal,tyre,zones[i])==normal)v[i]=psi(get(pressure,tyre,zones[i]));
+   if(tyre!=null)for(int i=0;i<4;i++)if(get(signal,tyre,zones[i])==normal)v[i]=NatV35Rules.psi(get(pressure,tyre,zones[i]));
    front=v[0]+" / "+v[1];rear=v[2]+" / "+v[3];
   }
   cached=new Values(now,d,p,front,rear);
  }
- static String temperature(int c){return c>=17&&c<=33?c+"°C":"—";}
- static String psi(int kpa){return kpa>0&&kpa<=600?String.format(Locale.US,"%.1f",kpa/6.894757293):"—";}
+
 }

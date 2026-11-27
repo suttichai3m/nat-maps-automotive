@@ -11,3 +11,5 @@ Dashboard: adds outside temperature (fresh existing sample), BMS SOH and pack av
 References: BYD Open API v1.0.5 https://oip.byd.com/uploads/20210824/46cd2d7c2e878b0a1c6b066967e7f6fd.pdf ; independent DiLink 3 AC documentation https://github.com/wheregoes/byd-dolphin-hacking/blob/master/docs/ac-climate-control.md . These sources are not Seal firmware validation.
 
 Acceptance while parked: manually select day/night in Full Map and Split before/after Start; confirm actual basemap tiles, not just cards, then Auto/time and return from sleep. Test repeated phone Send to Car, Wi-Fi loss/recovery, screen wake, pending notification, route arrival, provider disabled and no duplicate open. Compare both climate zones, outside temp, pressure and SOH against native screens. Verify data expires, unavailable cases, no forced restart, and no layout overlap. Android build and actual APK tests pending.
+
+Added pure Java tests for cooldown, AC state/unit/sentinel handling and kPa conversion. CI runs these before the build. The tests do not emulate the SDK, MicroG or native map renderer.

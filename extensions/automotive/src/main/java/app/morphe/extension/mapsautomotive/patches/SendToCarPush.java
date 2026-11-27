@@ -94,7 +94,7 @@ public final class SendToCarPush {
     private static void recoverWhenDue(String reason){
         if(app==null||visible<=0||!SafeMode.on(app,SafeMode.SEND_TO_CAR))return;
         long now=SystemClock.elapsedRealtime();
-        long wait=lastNudge>0&&now>=lastNudge?Math.max(0,NUDGE_GAP_MS-(now-lastNudge)):0;
+        long wait=NatV35Rules.recoveryDelay(lastNudge,now,NUDGE_GAP_MS);
         if(wait>0){main.removeCallbacks(recovery);main.postDelayed(recovery,wait+250);return;}
         nudge(app,reason);
     }

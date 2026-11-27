@@ -32,6 +32,8 @@ jobs:
         run: bash scripts/test-nat-v33.sh
       - name: V3.4 Smart EV math tests
         run: bash scripts/test-nat-v34.sh
+      - name: V3.5 recovery and signal tests
+        run: bash scripts/test-nat-v35.sh
       - name: Build patch
         env:
           GITHUB_ACTOR: ${{ github.actor }}
