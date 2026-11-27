@@ -513,6 +513,21 @@ public final class ColorScheme {
      */
     private static int refreshGeneration; // main thread only
 
+    /** Overrides the actual native Maps mode consumer, not just NAT colors.
+     * Do not persist or modify the original enum; release override in System mode. */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static Enum<?> nativeModeValue(Enum<?> current) {
+        if (current == null) return null;
+        try {
+            if (!on() || !Utils.isContextSet()) return current;
+            String selected = choice();
+            if (SYSTEM.equals(selected)) return current;
+            boolean target = nightColors(application());
+            return Enum.valueOf((Class) current.getDeclaringClass(), target ? "FORCE_NIGHT" : "FORCE_DAY");
+        } catch (Throwable error) { ReportLog.w(TAG, "Native consumer mode override failed", error); }
+        return current;
+    }
+
     static void refreshOnFocus(){if(on()&&Utils.isContextSet())refresh("activity focus");}
     private static void refresh(String reason) {
         mainHandler().post(() -> refreshAttempt(reason, ++refreshGeneration, 0));

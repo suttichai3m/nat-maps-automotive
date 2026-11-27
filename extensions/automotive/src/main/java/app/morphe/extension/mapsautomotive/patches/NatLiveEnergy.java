@@ -12,6 +12,7 @@ final class NatLiveEnergy {
     void setSession(long id){if(session!=id){endRoute();session=id;}}
     static double coveredRate(double net,double km){return km+1e-9>=MIN_RATE_KM&&Double.isFinite(net)&&net>=0?net*100/km:Double.NaN;}
     static boolean fresh(long now,long stamp){return stamp>=0&&now>=stamp&&now-stamp<=30000;}
+    static boolean powerFresh(long now,long stamp){return stamp>=0&&now>=stamp&&now-stamp<=5000;}
     static boolean moving(double s){return Double.isFinite(s)&&s>1&&s<=250;}
     static double validSoc(double s){return Double.isFinite(s)&&s>=0&&s<=100?s:Double.NaN;}
     void endRoute(){guided=false;at=-1;wh=odo=-1;speed=Double.NaN;net=increase=coveredNet=km=0;pairs=distancePairs=gaps=0;power=Double.NaN;}
@@ -43,7 +44,7 @@ final class NatLiveEnergy {
     }
     Reading read(long now,boolean route){
         boolean recent=fresh(now,sampleAt), valid=recent&&route&&guided&&pairs>0;
-        return new Reading(recent?soc:Double.NaN,valid?power:Double.NaN,valid?net:Double.NaN,valid?increase:Double.NaN,
+        return new Reading(recent?soc:Double.NaN,valid&&powerFresh(now,sampleAt)&&moving(speed)?power:Double.NaN,valid?net:Double.NaN,valid?increase:Double.NaN,
                 valid&&distancePairs>0?coveredRate(coveredNet,km):Double.NaN,valid&&distancePairs>0?km:Double.NaN,valid?pairs:0,valid?gaps:0);
     }
 }

@@ -119,11 +119,10 @@ final class NatMinimalEv {
         }
         if(hideNative(state,c,false))return;
         if(ownedSearch(state)&&c.results){toast(a,"ใช้ปุ่มปิดผลค้นหาของ Maps");return;}
-        View open=unique(c.open),along=unique(c.along);
-        boolean pending=android.os.SystemClock.elapsedRealtime()<=state.categoryUntil&&c.mapControls;
-        if((route||pending)&&open!=null&&!c.results){if(open.performClick()){state.opened=true;state.confirmed=false;state.categoryUntil=-1;state.openedAt=android.os.SystemClock.elapsedRealtime();report(state,"Native EV category requested");}return;}
-        if(route&&along!=null&&!c.results){if(along.performClick()){state.categoryUntil=android.os.SystemClock.elapsedRealtime()+30000;toast(a,"เลือกหมวดการชาร์จ EV ใน Maps");}return;}
-        toast(a,"เปิดค้นหาตามเส้นทางใน Maps แล้วเลือก EV");report(state,"Native EV action unavailable; no route change");
+        View open=unique(c.open);
+        if(route&&c.mapControls&&open!=null&&!c.results){if(open.performClick()){state.opened=true;state.confirmed=false;state.categoryUntil=-1;state.openedAt=android.os.SystemClock.elapsedRealtime();report(state,"Native EV category requested");}return;}
+        state.categoryUntil=-1;
+        toast(a,"ยังไม่พบตัวควบคุมสถานีชาร์จบนแผนที่");report(state,"EV direct control unavailable; generic Search not opened; route retained");
     }
     /** No overlay if it could cover another visible native control or label. */
     private static boolean free(List<View> views,Rect slot,View host){
@@ -246,8 +245,9 @@ final class NatMinimalEv {
         TextView close=button(a,"×","ปิดหน้าต่าง",()->{s.mode=0;removePanel(s);refresh(a,a.getWindow().peekDecorView());});close.setTextColor(fg);header.addView(close,new android.widget.LinearLayout.LayoutParams(dp(a,44),dp(a,40)));box.addView(header);
         android.widget.ScrollView scroll=new android.widget.ScrollView(a);scroll.setTag(OWN);android.widget.LinearLayout content=column(a);scroll.addView(content);box.addView(scroll,new android.widget.LinearLayout.LayoutParams(-1,0,1));
         if(s.mode==1){
-            content.addView(line(a,"LIVE POWER • ค่าเฉลี่ยช่วงตัวอย่าง",12,muted));
+            content.addView(line(a,"กำลังไฟแบตเตอรี่เฉลี่ย (ไม่ใช่ค่าหน้าปัด)",12,muted));
             content.addView(line(a,power+" · "+powerState,20,fg));
+             content.addView(line(a,"กำลังไฟจริงจากหน้าปัด BYD: — (ยังไม่มีสัญญาณที่ยืนยัน)",11,muted));
             if(Double.isFinite(displayedPower)){
                 PowerGauge gauge=new PowerGauge(a,displayedPower,dark);gauge.setTag(OWN);content.addView(gauge,new android.widget.LinearLayout.LayoutParams(-1,dp(a,18)));
                 content.addView(line(a,"− เพิ่มพลังงาน     0     + จ่ายพลังงาน (kW)",10,muted));
@@ -282,7 +282,7 @@ final class NatMinimalEv {
         String message;
         if(mode==1){
             double used=f==null?Double.NaN:live.net;
-            message="LIVE POWER • ค่าเฉลี่ยช่วงตัวอย่าง\n"+number(f==null?Double.NaN:live.power,"kW")
+            message="กำลังไฟแบตเตอรี่เฉลี่ย (ไม่ใช่ค่าหน้าปัด)\n"+number(f==null?Double.NaN:live.power,"kW")+"\nกำลังไฟจริงจากหน้าปัด BYD: — (ยังไม่มีสัญญาณที่ยืนยัน)"
                 +"\n\nพลังงานสุทธิที่สังเกตได้: "+number(used,"kWh")
                 +"\nพลังงานที่ต้องใช้อีก: "+number(f==null?Double.NaN:f.remainingKwh,"kWh")
                 +"\nสิ้นเปลืองจากช่วงที่มีเลขไมล์: "+number(f==null?Double.NaN:live.rate,"kWh/100 km")
@@ -301,7 +301,7 @@ final class NatMinimalEv {
     }
     private static final class PowerGauge extends View {
         final double kw;final boolean dark;final android.graphics.Paint paint=new android.graphics.Paint(3);
-        PowerGauge(Context c,double kw,boolean dark){super(c);this.kw=kw;this.dark=dark;setContentDescription("Average battery power "+number(kw,"kW"));}
+        PowerGauge(Context c,double kw,boolean dark){super(c);this.kw=kw;this.dark=dark;setContentDescription("Estimated average battery power "+number(kw,"kW"));}
         @Override protected void onDraw(android.graphics.Canvas canvas){super.onDraw(canvas);float x=getWidth()/2f,y=getHeight()/2f,h=dp(getContext(),4),amount=(float)(Math.min(250,Math.abs(kw))/250*x);
             paint.setColor(dark?0xff40535e:0xffdce5e0);canvas.drawRoundRect(0,y-h,getWidth(),y+h,h,h,paint);
             paint.setColor(kw<0?0xff169b65:0xff4285f4);if(amount>0)canvas.drawRoundRect(kw<0?x-amount:x,y-h,kw<0?x:x+amount,y+h,h,h,paint);
