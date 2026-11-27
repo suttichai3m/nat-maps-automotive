@@ -348,7 +348,16 @@ final class NatMinimalEv {
         box.addView(label);box.addView(metric);put(host,box,slot,true);
         if(current){s.current=new WeakReference<>(box);s.currentKey=key;}else{s.remaining=new WeakReference<>(box);s.remainingKey=key;}
     }
+    static void splitAction(Activity a,int action){
+        if(!a.hasWindowFocus()||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY))return;
+        View root=a.getWindow().peekDecorView();if(root==null)return;
+        State s=STATES.get(a);if(s==null){s=new State();STATES.put(a,s);}
+        if(action==0||action==3)act(a,s,action==3);
+        else if(action==1||action==2){s.mode=action;s.explicitPanelRequest=true;try{NatPrediction.Snapshot f=NatPrediction.freshSnapshot();panelUnavailable(a,s,NatNavigationCard.matchesForecast(root,f)?f:null);}finally{s.explicitPanelRequest=false;}}
+        else if(action==4)NatSystemDiagnostics.show(a);
+    }
     static void refresh(Activity a,View root){
+        if(NatSplitScreen.active(a)){State s=STATES.get(a);if(s!=null){remove(s.host());removePanel(s);removeMini(s,true);removeMini(s,false);s.toolbar=null;s.mode=0;}return;}
         if(root==null||!enabled(a)||!root.hasWindowFocus()||!SafeMode.on(a,SafeMode.BYD_BATTERY)){clear(a);return;}
         View content=a.findViewById(android.R.id.content);if(!(content instanceof FrameLayout)){clear(a);return;}
         FrameLayout host=(FrameLayout)content;

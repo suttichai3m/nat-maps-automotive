@@ -292,3 +292,43 @@ public class TestNatToolbar {
 JAVA
 javac --release 17 -encoding UTF-8 -d "$D" "$P/NatToolbarLayout.java" "$D/TestNatToolbar.java"
 java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatToolbar
+
+cat > "$D/TestNatSplit.java" <<'JAVA'
+package app.morphe.extension.mapsautomotive.patches;
+class TestNatSplit {
+ static int n;static void check(boolean b){if(!b)throw new AssertionError("Split case "+(n+1));n++;}
+ public static void main(String[] args){
+  check(NatSplitMath.side(1600,900,540,200)==400);
+  check(NatSplitMath.side(800,480,540,200)==200);
+  check(NatSplitMath.side(799,480,540,200)==0);
+  check(NatSplitMath.side(480,800,540,200)==0);
+  check(NatSplitMath.side(800,800,540,200)==0);
+  check(NatSplitMath.side(0,480,540,200)==0);
+  check(NatSplitMath.side(1000,500,800,200)==0);
+  check(NatSplitMath.side(1001,500,540,200)==250);
+  check(NatSplitMath.speed(60,1000,0,15000)==60);
+  check(NatSplitMath.speed(0,1000,0,15000)==0);
+  check(Double.isNaN(NatSplitMath.speed(251,1000,0,15000)));
+  check(Double.isNaN(NatSplitMath.speed(-1,1000,0,15000)));
+  check(Double.isNaN(NatSplitMath.speed(Double.NaN,1000,0,15000)));
+  check(Double.isNaN(NatSplitMath.speed(60,15001,0,15000)));
+  check(Double.isNaN(NatSplitMath.speed(60,1,2,15000)));
+  check(NatSplitMath.turn(359,1,30,1000)==2);
+  check(NatSplitMath.turn(1,359,30,1000)==-2);
+  check(NatSplitMath.turn(10,30,30,1000)==20);
+  check(NatSplitMath.turn(30,10,30,1000)==-20);
+  check(NatSplitMath.turn(10,90,30,1000)==30);
+  check(NatSplitMath.turn(90,10,30,1000)==-30);
+  check(NatSplitMath.turn(90,90,30,1000)==0);
+  check(Double.isNaN(NatSplitMath.turn(90,100,0,1000)));
+  check(Double.isNaN(NatSplitMath.turn(90,100,4.9,1000)));
+  check(Double.isNaN(NatSplitMath.turn(90,100,30,299)));
+  check(Double.isNaN(NatSplitMath.turn(90,100,30,5001)));
+  check(Double.isNaN(NatSplitMath.turn(Double.NaN,100,30,1000)));
+  check(Double.isNaN(NatSplitMath.turn(360,100,30,1000)));
+  System.out.println("PASS: "+n+" NAT V3.0 split and motion cases");
+ }
+}
+JAVA
+javac --release 17 -encoding UTF-8 -d "$D" "$P/NatSplitMath.java" "$D/TestNatSplit.java"
+java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatSplit

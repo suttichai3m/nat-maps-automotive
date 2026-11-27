@@ -700,6 +700,7 @@ public final class BydBatteryPatch {
             record.soc = sample.soc;
             record.mileage01km = sample.mileage;
             record.speedKmh = sample.speedKmh;
+            NatSplitScreen.observe(record.elapsed,record.speedKmh);
             if (outsideC != BydOutsideTemperature.UNAVAILABLE) record.outsideC = outsideC;
             BydBatteryHealth.Raw temperatures = sampleTemperatures;
             if (temperatures != null && temperatures.average != BydBatteryHealth.UNAVAILABLE) record.batteryTempRaw = temperatures.average;
@@ -1592,6 +1593,7 @@ public final class BydBatteryPatch {
             natDiagnostics.setText(thai ? "NAT System Diagnostics — CPU / RAM / GPS" : "NAT System Diagnostics — CPU / RAM / GPS");
             natDiagnostics.setOnClickListener(v -> NatSystemDiagnostics.show(host));
             content.addView(natDiagnostics);
+            Button natSplit = new Button(themed);natSplit.setText("NAT V3.0 — Split / Full Map");natSplit.setOnClickListener(v->NatSplitScreen.toggle(host));content.addView(natSplit);
             android.widget.Switch minimalEv = new android.widget.Switch(themed);
             minimalEv.setText(thai ? "ปุ่ม NAT และ Live Energy (ทดลอง)" : "NAT controls and Live Energy (experimental)");
             minimalEv.setChecked(NatMinimalEv.enabled(host));
