@@ -129,3 +129,27 @@ public class TestNatMinimalEv {
 JAVA
 javac --release 17 -encoding UTF-8 -d "$D" "$P/NatMinimalEvRules.java" "$D/TestNatMinimalEv.java"
 java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatMinimalEv
+
+cat > "$D/TestNatStability.java" <<'JAVA'
+package app.morphe.extension.mapsautomotive.patches;
+public class TestNatStability {
+ static int n;static void check(boolean x){if(!x)throw new AssertionError("Stability case "+n);n++;}
+ static boolean near(double a,double b){return Math.abs(a-b)<1e-6;}
+ public static void main(String[] args){
+  check(NatStabilityMath.fresh(30000,0));check(!NatStabilityMath.fresh(30001,0));check(!NatStabilityMath.fresh(0,1));
+  check(NatStabilityMath.signedSoc(-40000,80000,-1)==-50);check(NatStabilityMath.signedSoc(0,80000,-1)==0);check(NatStabilityMath.signedSoc(40000,80000,49)==49);
+  check(near(NatStabilityMath.remainingKwh(80000,-40000,0,true),120));
+  check(near(NatStabilityMath.remainingKwh(80000,20000,60000,true),120));
+  check(Double.isNaN(NatStabilityMath.remainingKwh(80000,20000,0,false)));check(Double.isNaN(NatStabilityMath.remainingKwh(-1,20000,0,true)));
+  check(near(NatStabilityMath.rate(120,750),16));check(Double.isNaN(NatStabilityMath.rate(120,0)));
+  check(near(NatStabilityMath.cost(5,7.5),37.5));check(Double.isNaN(NatStabilityMath.cost(5,Double.NaN)));check(Double.isNaN(NatStabilityMath.cost(-5,7)));
+  check(NatStabilityMath.autoHide(false,-1,true,0));check(NatStabilityMath.autoHide(true,0,true,1));check(!NatStabilityMath.autoHide(true,1,true,1));check(!NatStabilityMath.autoHide(true,1,false,-1));
+  check(!NatStabilityMath.moving(Double.NaN));check(!NatStabilityMath.moving(0));check(NatStabilityMath.moving(60));check(!NatStabilityMath.pair(31000,60,60));check(!NatStabilityMath.pair(10000,0,60));
+  check(NatStabilityMath.matches(20,100,20,100));check(!NatStabilityMath.matches(20,100,20,200));check(!NatStabilityMath.matches(20,100,21,100));
+  NatStabilityMath.Observed o=new NatStabilityMath.Observed();o.observe(50000,10000,40);o.observe(49900,20000,40);check(near(o.net,.1)&&o.pairs==1);o.observe(50100,30000,0);o.observe(50000,40000,40);check(near(o.net,.1)&&o.pairs==1);o.observe(49000,80000,40);check(o.pairs==1);o.reset();check(o.pairs==0&&o.net==0);
+  System.out.println("PASS: "+n+" NAT V2.0.1 stability cases");
+ }
+}
+JAVA
+javac --release 17 -encoding UTF-8 -d "$D" "$P/NatStabilityMath.java" "$D/TestNatStability.java"
+java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatStability

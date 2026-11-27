@@ -23,9 +23,15 @@ final class NatMinimalEv {
     private static final String PREF="nat_minimal_ev";
     private static final WeakHashMap<Activity,State> STATES=new WeakHashMap<>();
     private static final class State {
-        WeakReference<TextView> button;
-        boolean opened;
+        WeakReference<android.widget.LinearLayout> toolbar,panel;
+        boolean opened,previousFresh;
+        int previousStops=-1,mode=0;
+        long openedAt=-1;
+        String rendered="",diagnostic="";
         int left=-1,top=-1;
+        boolean vertical;
+        View host(){return toolbar==null?null:toolbar.get();}
+        View sheet(){return panel==null?null:panel.get();}
     }
     static boolean enabled(Context c){return c.getSharedPreferences(PREF,0).getBoolean("shortcut",true);}
     static void setEnabled(Activity a,boolean on){a.getSharedPreferences(PREF,0).edit().putBoolean("shortcut",on).apply();if(!on)clear(a);}
@@ -33,7 +39,7 @@ final class NatMinimalEv {
     private static boolean in(View v,String name){for(View p=v;p!=null;){if(id(p).equals(name))return true;ViewParent par=p.getParent();p=par instanceof View?(View)par:null;}return false;}
     private static boolean visible(View v){return v.isShown()&&v.getAlpha()>0f&&v.getGlobalVisibleRect(new Rect());}
     private static void collect(View v,List<View> out,int depth,View own){
-        if(v==own||depth>40||!visible(v))return;out.add(v);
+        if(v==own||owned(v)||depth>40||!visible(v))return;out.add(v);
         if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)collect(g.getChildAt(i),out,depth+1,own);}
     }
     private static CharSequence label(View v){return v instanceof TextView?((TextView)v).getText():v.getContentDescription();}
@@ -66,7 +72,7 @@ final class NatMinimalEv {
             if(e){
                 View target=clickable(v);
                 boolean category=in(v,"destination_input_search_category_list_view")||in(v,"destination_input_search_category_list_frame_view");
-                if(category){if(checked(v)||checked(target))add(c.hide,target);else add(c.open,target);}
+                if(category&&!checked(v)&&!checked(target))add(c.open,target);
                 if(v instanceof TextView && !(v instanceof android.widget.EditText) && !in(v,"navigation_search_results_list")&&!category)c.evEvidence=true;
                 if(v instanceof android.widget.EditText && e)c.evEvidence=true;
             }
@@ -77,18 +83,34 @@ final class NatMinimalEv {
         return c;
     }
     private static void toast(Activity a,String s){Toast.makeText(a,s,Toast.LENGTH_SHORT).show();}
-    private static void act(Activity a,State state){
+    private static final String OWN="nat_v201_overlay";
+    static boolean owned(View v){return OWN.equals(v.getTag());}
+    private static void report(State s,String msg){if(!msg.equals(s.diagnostic)){s.diagnostic=msg;ReportLog.i("NatMinimalEv",msg);}}
+    private static boolean ownedSearch(State s){long now=android.os.SystemClock.elapsedRealtime();return s.opened&&s.openedAt>=0&&now-s.openedAt<=120000;}
+    private static boolean hideNative(State s,Controls c,boolean explicitOnly){
+        View h=unique(c.hide),close=unique(c.close);
+        if(h!=null&&ownedSearch(s)&&c.evEvidence){if(h.performClick()){s.opened=false;report(s,"Native EV hide requested");return true;}}
+        if(!explicitOnly&&NatMinimalEvRules.allowClose(ownedSearch(s),c.results,c.evEvidence,close!=null)){
+            if(close.performClick()){s.opened=false;report(s,"Native close search requested");return true;}
+        }
+        return false;
+    }
+    private static Controls controls(View root){List<View> all=new ArrayList<>();collect(root,all,0,null);return inspect(all);}
+    private static void act(Activity a,State state,boolean clean){
         if(a.isFinishing()||!a.hasWindowFocus()||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY))return;
         View root=a.getWindow().peekDecorView();if(root==null)return;
-        List<View> views=new ArrayList<>();collect(root,views,0,state.button==null?null:state.button.get());
-        Controls c=inspect(views);View h=unique(c.hide),close=unique(c.close),open=unique(c.open),along=unique(c.along);
-        boolean route=NatNavigationCard.hasVerifiedRoute(root);
-        if(h!=null&&(route||state.opened)){if(h.performClick())state.opened=false;return;}
-        if(NatMinimalEvRules.allowClose(state.opened,c.results,c.evEvidence,close!=null)){if(close.performClick())state.opened=false;return;}
-        if(state.opened&&c.results){toast(a,"ใช้ปุ่มปิดผลค้นหาของ Maps / Use native close search");return;}
-        if(route&&open!=null){if(open.performClick())state.opened=true;return;}
-        if(route&&along!=null){if(along.performClick())toast(a,"เลือกหมวดการชาร์จ EV / Select EV charging");return;}
-        toast(a,"เปิดค้นหาตามเส้นทางใน Maps แล้วเลือก EV / Use native along-route search");
+        Controls c=controls(root);boolean route=NatNavigationCard.hasVerifiedRoute(root);
+        state.mode=0;removePanel(state);
+        if(clean){
+            if(ownedSearch(state)&&!hideNative(state,c,false)&&c.results)toast(a,"ปิดผลค้นหา EV ด้วยปุ่มของ Maps");
+            report(state,"Clean mode: NAT panels closed; native route retained");return;
+        }
+        if(hideNative(state,c,false))return;
+        if(ownedSearch(state)&&c.results){toast(a,"ใช้ปุ่มปิดผลค้นหาของ Maps");return;}
+        View open=unique(c.open),along=unique(c.along);
+        if(route&&open!=null&&!c.results){if(open.performClick()){state.opened=true;state.openedAt=android.os.SystemClock.elapsedRealtime();report(state,"Native EV category requested");}return;}
+        if(route&&along!=null&&!c.results){if(along.performClick())toast(a,"เลือกหมวดการชาร์จ EV");return;}
+        toast(a,"เปิดค้นหาตามเส้นทางใน Maps แล้วเลือก EV");report(state,"Native EV action unavailable; no route change");
     }
     /** No overlay if it could cover another visible native control or label. */
     private static boolean free(List<View> views,Rect slot,View host){
@@ -105,44 +127,117 @@ final class NatMinimalEv {
         }
         return true;
     }
+    private static void remove(View v){if(v!=null&&v.getParent() instanceof ViewGroup)((ViewGroup)v.getParent()).removeView(v);}
+    private static void removePanel(State s){remove(s.sheet());s.panel=null;s.rendered="";}
     static void clear(Activity a){
-        State s=STATES.get(a);if(s==null)return;TextView b=s.button==null?null:s.button.get();
-        if(b!=null&&b.getParent() instanceof ViewGroup)((ViewGroup)b.getParent()).removeView(b);s.button=null;s.left=s.top=-1;
+        State s=STATES.get(a);if(s==null)return;remove(s.host());removePanel(s);s.toolbar=null;s.left=s.top=-1;s.mode=0;
+    }
+    private static android.widget.LinearLayout column(Context a){android.widget.LinearLayout l=new android.widget.LinearLayout(a);l.setTag(OWN);l.setOrientation(android.widget.LinearLayout.VERTICAL);return l;}
+    private static int dp(Context a,int v){return Math.round(v*a.getResources().getDisplayMetrics().density);}
+    private static GradientDrawable background(int color,int radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(radius);return g;}
+    private static TextView button(Activity a,String symbol,String description,Runnable action){
+        TextView t=new TextView(a);t.setTag(OWN);t.setText(symbol);t.setTextSize(23);t.setGravity(Gravity.CENTER);t.setContentDescription(description);t.setOnClickListener(v->action.run());return t;
+    }
+    private static void style(TextView t,boolean active,boolean dark,int radius){
+        t.setBackground(background(active?0xff16805c:dark?0xff20303a:0xffffffff,radius));t.setTextColor(active||dark?Color.WHITE:0xff263238);
+    }
+    private static void switchPanel(Activity a,State s,int which){
+        s.mode=s.mode==which?0:which;removePanel(s);View root=a.getWindow().peekDecorView();if(root!=null)refresh(a,root);
+    }
+    private static void put(FrameLayout host,View view,Rect slot,boolean newView){
+        android.graphics.Point origin=new android.graphics.Point();Rect dummy=new Rect();host.getGlobalVisibleRect(dummy,origin);
+        FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(slot.width(),slot.height(),Gravity.TOP|Gravity.LEFT);
+        lp.leftMargin=slot.left-origin.x;lp.topMargin=slot.top-origin.y;
+        if(newView)host.addView(view,lp);else view.setLayoutParams(lp);
+    }
+    private static String number(double d,String unit){return Double.isFinite(d)?String.format(java.util.Locale.US,"%.1f %s",d,unit):"—";}
+    private static double tariff(Context a){try{return Double.parseDouble(a.getSharedPreferences(PREF,0).getString("tariff",""));}catch(RuntimeException e){return Double.NaN;}}
+    private static void editTariff(Activity a,State s){
+        android.widget.EditText e=new android.widget.EditText(a);e.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);double old=tariff(a);if(Double.isFinite(old))e.setText(String.valueOf(old));e.setHint("บาท / kWh");
+        new android.app.AlertDialog.Builder(a).setTitle("ค่าไฟอ้างอิง (กรอกเอง)").setView(e).setNegativeButton("Cancel",null).setPositiveButton("Save",(d,w)->{try{double value=Double.parseDouble(e.getText().toString());if(!Double.isFinite(value)||value<=0||value>100)throw new IllegalArgumentException();a.getSharedPreferences(PREF,0).edit().putString("tariff",Double.toString(value)).apply();}catch(RuntimeException ex){toast(a,"ค่าไฟไม่ถูกต้อง");}}).show();
+    }
+    private static TextView line(Context a,String text,int size,int color){TextView t=new TextView(a);t.setTag(OWN);t.setText(text);t.setTextSize(size);t.setTextColor(color);return t;}
+    private static void showPanel(Activity a,FrameLayout host,State s,List<View> views,Rect bounds,Rect toolbarSlot,boolean dark,NatPrediction.Snapshot f){
+        if(s.mode==0){removePanel(s);return;}
+        int w=Math.min(dp(a,340),bounds.width()-dp(a,100)),h=Math.min(dp(a,230),bounds.height()-dp(a,100));
+        if(w<dp(a,215)||h<dp(a,145)){removePanel(s);s.mode=0;toast(a,"พื้นที่หน้าจอไม่พอ ใช้เมนู BYD Battery Settings");return;}
+        Rect slot=null;
+        for(int edge=0;edge<2&&slot==null;edge++)for(float fy:new float[]{.25f,.40f,.12f}){
+            int x=edge==0?bounds.left+dp(a,12):bounds.right-dp(a,12)-w;
+            int y=bounds.top+(int)(bounds.height()*fy);Rect q=new Rect(x,y,x+w,y+h);
+            if(bounds.contains(q)&&!Rect.intersects(toolbarSlot,q)&&free(views,q,host)){slot=q;break;}
+        }
+        if(slot==null){removePanel(s);s.mode=0;toast(a,"ไม่พบพื้นที่ปลอดภัย ใช้เมนู BYD Battery Settings");report(s,"Panel unavailable: native controls protected");return;}
+        double observed=NatPrediction.observedKwh(),cost=NatStabilityMath.cost(observed,tariff(a));
+        String remaining=f==null?"—":number(f.remainingKwh,"kWh");
+        String rate=f==null?"—":number(NatStabilityMath.rate(f.remainingKwh,f.km),"kWh/100 km");
+        String used=number(observed,"kWh"),money=number(cost,"THB");
+        String plan=f==null?"ไม่มี forecast สดจาก Maps":f.charges==0?"ยังไม่มีจุดชาร์จใน forecast":("แผนจาก Maps (ไม่มีชื่อสถานี)"+f.plan);
+        String arrival=f==null?"—":f.google+"%";
+        String signature=s.mode+"|"+dark+"|"+remaining+"|"+rate+"|"+used+"|"+money+"|"+plan+"|"+arrival+"|"+slot.toShortString();
+        if(signature.equals(s.rendered)&&s.sheet()!=null)return;
+        removePanel(s);s.rendered=signature;
+        int fg=dark?0xffedf4f7:0xff263238, muted=dark?0xffbacbd3:0xff546a74;
+        android.widget.LinearLayout box=column(a);box.setPadding(dp(a,12),dp(a,8),dp(a,12),dp(a,8));box.setBackground(background(dark?0xff20303a:Color.WHITE,dp(a,12)));box.setElevation(dp(a,6));
+        android.widget.LinearLayout header=new android.widget.LinearLayout(a);header.setTag(OWN);header.setGravity(Gravity.CENTER_VERTICAL);
+        TextView title=line(a,s.mode==1?"Energy Prediction":"Charging Plan",18,fg);header.addView(title,new android.widget.LinearLayout.LayoutParams(0,-2,1));
+        TextView close=button(a,"×","ปิดหน้าต่าง",()->{s.mode=0;removePanel(s);refresh(a,a.getWindow().peekDecorView());});close.setTextColor(fg);header.addView(close,new android.widget.LinearLayout.LayoutParams(dp(a,44),dp(a,40)));box.addView(header);
+        android.widget.ScrollView scroll=new android.widget.ScrollView(a);scroll.setTag(OWN);android.widget.LinearLayout content=column(a);scroll.addView(content);box.addView(scroll,new android.widget.LinearLayout.LayoutParams(-1,0,1));
+        if(s.mode==1){
+            String[] labels={"พลังงานที่ต้องใช้อีก","อัตราสิ้นเปลืองเฉลี่ยตาม forecast","พลังงานสุทธิที่สังเกตได้","ค่าไฟประมาณการ"};
+            String[] values={remaining,rate,used,money};
+            for(int i=0;i<4;i+=2){
+                android.widget.LinearLayout row=new android.widget.LinearLayout(a);row.setTag(OWN);
+                for(int j=i;j<i+2;j++){android.widget.LinearLayout cell=column(a);cell.setPadding(dp(a,5),dp(a,3),dp(a,5),dp(a,3));cell.addView(line(a,labels[j],11,muted));cell.addView(line(a,values[j],19,fg));row.addView(cell,new android.widget.LinearLayout.LayoutParams(0,-2,1));}
+                content.addView(row);
+            }
+            content.addView(line(a,f==null?"ไม่มี forecast สด":f.charges>0?"ประมาณจากพลังงานและจุดชาร์จขั้นต่ำใน Maps":"ประมาณจาก Wh ของ BYD และ Maps",11,muted));
+            content.addView(line(a,"พลังงานที่ใช้: เฉพาะช่วงขับที่ได้รับข้อมูล ไม่ใช่ยอดทั้งเที่ยว",11,muted));
+            android.widget.Button set=new android.widget.Button(a);set.setTag(OWN);set.setText("ตั้งค่าไฟ");set.setOnClickListener(v->editTariff(a,s));content.addView(set);
+        }else{
+            content.addView(line(a,plan,14,fg));content.addView(line(a,"แบตปลายทางตาม Maps: "+arrival,15,fg));
+            android.widget.Button search=new android.widget.Button(a);search.setTag(OWN);search.setText("ค้นหาจุดชาร์จตามเส้นทาง");search.setOnClickListener(v->act(a,s,false));content.addView(search);
+            content.addView(line(a,"ให้ Maps คำนวณใหม่หลังเพิ่มจุดแวะ • ไม่มีข้อมูลสถานีสำหรับแนะนำอัตโนมัติ",11,muted));
+        }
+        put(host,box,slot,true);s.panel=new WeakReference<>(box);
     }
     static void refresh(Activity a,View root){
-        if(!enabled(a)||!root.hasWindowFocus()||!SafeMode.on(a,SafeMode.BYD_BATTERY)){clear(a);return;}
+        if(root==null||!enabled(a)||!root.hasWindowFocus()||!SafeMode.on(a,SafeMode.BYD_BATTERY)){clear(a);return;}
         View content=a.findViewById(android.R.id.content);if(!(content instanceof FrameLayout)){clear(a);return;}
         FrameLayout host=(FrameLayout)content;
         State state=STATES.get(a);if(state==null){state=new State();STATES.put(a,state);}
-        TextView button=state.button==null?null:state.button.get();
-        List<View> views=new ArrayList<>();collect(root,views,0,button);Controls c=inspect(views);
+        final State owner=state;
+        List<View> views=new ArrayList<>();collect(root,views,0,null);Controls c=inspect(views);
         boolean route=NatNavigationCard.hasVerifiedRoute(root);
-        if(!c.mapControls||(!route&&!state.opened)){clear(a);return;}
-        // Show only when a native action was verified; do not launch a generic search over an existing route.
-        boolean actionable=unique(c.hide)!=null||NatMinimalEvRules.allowClose(state.opened,c.results,c.evEvidence,unique(c.close)!=null)||(route&&(unique(c.open)!=null||unique(c.along)!=null));
-        if(!actionable){clear(a);return;}
+        NatPrediction.Snapshot forecast=NatPrediction.freshSnapshot();boolean fresh=forecast!=null;int stops=fresh?forecast.charges:-1;
+        if(NatStabilityMath.autoHide(state.previousFresh,state.previousStops,fresh,stops)){
+            state.mode=0;removePanel(state);report(state,"Auto-hide: new forecast or changed charging-stop count");
+            // Native results are never cleared automatically through generic close or Back.
+        }
+        state.previousFresh=fresh;state.previousStops=stops;
+        if(!ownedSearch(state)||(!c.results&&!c.evEvidence&&unique(c.hide)==null&&unique(c.open)!=null))state.opened=false;
+        if(!c.mapControls||(!route&&!ownedSearch(state)&&!fresh)){clear(a);return;}
         Rect bounds=new Rect();if(!host.getGlobalVisibleRect(bounds)){clear(a);return;}
-        float d=host.getResources().getDisplayMetrics().density;int size=Math.round(48*d),gap=Math.round(12*d);
-        Rect slot=null;
-        for(int edge=0;edge<2&&slot==null;edge++)for(float fy:new float[]{.35f,.48f,.60f,.23f}){
-            int x=edge==0?bounds.right-gap-size:bounds.left+gap;
-            int y=bounds.top+(int)(bounds.height()*fy);Rect r=new Rect(x,y,x+size,y+size);
-            if(bounds.contains(r)&&free(views,r,host)){slot=r;break;}
+        int size=dp(a,48),gap=dp(a,7),edge=dp(a,12),length=size*4+gap*3;
+        Rect slot=null;boolean vertical=true;
+        for(int orientation=0;orientation<2&&slot==null;orientation++)for(int side=0;side<2&&slot==null;side++)for(float fy:new float[]{.22f,.34f,.10f,.46f}){
+            int w=orientation==0?size:length,h=orientation==0?length:size;
+            int x=side==0?bounds.right-edge-w:bounds.left+edge;
+            int y=bounds.top+(int)(bounds.height()*fy);Rect r=new Rect(x,y,x+w,y+h);
+            if(bounds.contains(r)&&free(views,r,host)){slot=r;vertical=orientation==0;break;}
         }
-        if(slot==null){clear(a);return;}
-        android.graphics.Point origin=new android.graphics.Point();Rect ignored=new Rect();host.getGlobalVisibleRect(ignored,origin);
-        int x=slot.left-origin.x,y=slot.top-origin.y;
-        boolean active=unique(c.hide)!=null||(state.opened&&c.results&&c.evEvidence);
-        boolean dark=ColorScheme.nightColors(a);
-        if(button==null){
-            button=new TextView(a);button.setText("⚡");button.setTextSize(23);button.setGravity(Gravity.CENTER);button.setElevation(5*d);
-            final State owner=state;button.setOnClickListener(v->act(a,owner));state.button=new WeakReference<>(button);
-            FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(size,size,Gravity.TOP|Gravity.LEFT);lp.leftMargin=x;lp.topMargin=y;host.addView(button,lp);
-        }else if(state.left!=x||state.top!=y){
-            FrameLayout.LayoutParams lp=(FrameLayout.LayoutParams)button.getLayoutParams();lp.leftMargin=x;lp.topMargin=y;button.setLayoutParams(lp);
-        }
-        state.left=x;state.top=y;
-        GradientDrawable bg=new GradientDrawable();bg.setShape(GradientDrawable.OVAL);bg.setColor(active?0xff16805c:dark?0xff20303a:0xffffffff);button.setBackground(bg);button.setTextColor(active||dark?Color.WHITE:0xff263238);
-        button.setContentDescription(active?"ซ่อนสถานีชาร์จ / Hide EV charging":"การชาร์จ EV / EV charging");
+        if(slot==null){clear(a);report(state,"Toolbar unavailable: native controls protected");return;}
+        boolean active=ownedSearch(state)&&(c.evEvidence||unique(c.hide)!=null);boolean dark=ColorScheme.nightColors(a);
+        android.widget.LinearLayout bar=state.toolbar==null?null:state.toolbar.get();
+        if(bar==null||bar.getParent()!=host||state.vertical!=vertical){
+            remove(bar);bar=column(a);bar.setOrientation(vertical?1:0);bar.setElevation(dp(a,5));
+            TextView[] keys={button(a,"⚡","EV Charging",()->act(a,owner,false)),button(a,"↗","Energy Prediction",()->switchPanel(a,owner,1)),button(a,"☷","Charging Plan",()->switchPanel(a,owner,2)),button(a,"⊘","Clean Mode",()->{act(a,owner,true);refresh(a,a.getWindow().peekDecorView());})};
+            for(int i=0;i<keys.length;i++){android.widget.LinearLayout.LayoutParams lp=new android.widget.LinearLayout.LayoutParams(size,size);if(i>0){if(vertical)lp.topMargin=gap;else lp.leftMargin=gap;}bar.addView(keys[i],lp);}
+            put(host,bar,slot,true);state.toolbar=new WeakReference<>(bar);state.vertical=vertical;
+        }else if(state.left!=slot.left||state.top!=slot.top)put(host,bar,slot,false);
+        state.left=slot.left;state.top=slot.top;
+        boolean[] activeKeys={active,state.mode==1,state.mode==2,false};
+        for(int i=0;i<4;i++){TextView t=(TextView)bar.getChildAt(i);int style=(dark?2:0)+(activeKeys[i]?1:0);if(t.getCurrentTextColor()!=(activeKeys[i]||dark?Color.WHITE:0xff263238)||t.isSelected()!=activeKeys[i]||t.getBackground()==null){style(t,activeKeys[i],dark,size/2);t.setSelected(activeKeys[i]);}}
+        showPanel(a,host,state,views,bounds,slot,dark,forecast);
     }
 }
