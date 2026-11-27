@@ -126,7 +126,7 @@ private fun MutableMethod.filterString(index: Int, register: Int, extensionMetho
 private val bydEnergyProviderPatch = resourcePatch {
     dependsOn(manifestPatch)
     execute {
-        document("AndroidManifest.xml").use { addBydEnergyProvider(it, PATCHED_PACKAGE_NAME) }
+        document("AndroidManifest.xml").use { addBydEnergyProvider(it, PATCHED_PACKAGE_NAME); addNatLauncherQueries(it) }
     }
 }
 
@@ -525,4 +525,14 @@ internal fun addBydEnergyProvider(document: Document, packageName: String) {
             setAttribute("android:exported", "false")
         },
     )
+}
+
+// Narrow Android package visibility to exported launcher candidates, no QUERY_ALL_PACKAGES.
+internal fun addNatLauncherQueries(document: Document) {
+    val root = document.documentElement
+    val queries = document.getElementsByTagName("queries").item(0) as? Element ?: document.createElement("queries").also { root.appendChild(it) }
+    val intent = document.createElement("intent")
+    intent.appendChild(document.createElement("action").apply { setAttribute("android:name", "android.intent.action.MAIN") })
+    intent.appendChild(document.createElement("category").apply { setAttribute("android:name", "android.intent.category.LAUNCHER") })
+    queries.appendChild(intent)
 }

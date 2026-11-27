@@ -83,8 +83,12 @@ final class NatSmartEvMenu {
   },100);
  }
  private void home(){
-  heading("Smart EV  •  NAT V3.7");
+  heading("Smart EV  •  NAT V4.0 Candidate");
   line("เลือกฟังก์ชัน • รายละเอียดควรเปิดดูเมื่อจอดรถ");
+  action("Grab / Bolt / Private • Driver Mode",()->closeThen(()->NatDriverWork.show(a)));
+  action("Favorite Apps Manager",()->closeThen(()->NatV36Shortcuts.favoriteApps(a)));
+  action("Monthly EV Intelligence",()->closeThen(()->NatMonthlyEv.show(a)));
+  action("Smart Resume / Driving Mode",()->closeThen(()->NatSplitScreen.personalize(a)));
   action("★  Favorite Destinations • สถานที่โปรด",()->closeThen(()->NatFavorites.show(a)));
   action("⚡  Smart Charging Assistant",this::charging);
   action("◷  Daily Driving Timeline",()->closeThen(()->NatTripTimeline.show(a)));

@@ -45,8 +45,10 @@ final class NatV33Telemetry {
  // Worker thread only. Distance spans same-day restarts; unobserved energy is never fabricated.
  static void sample(Context c,BydEnergyReader.Sample s){
   try{NatV36Daily.observe(c,s);}catch(RuntimeException ignored){}
+  try{NatDriverWork.sample(c,s);}catch(RuntimeException ignored){}
   String d=day(s.wall);SharedPreferences pref=prefs(c);
   if(!d.equals(day)){
+   try{NatMonthlyEv.archive(c,pref,d);}catch(RuntimeException ignored){}
    day=d;boolean same=d.equals(pref.getString("day",""));
    odo=same?pref.getInt("odo",-1):-1;km=same?pref.getFloat("km",0):0;
    net=same?pref.getFloat("net",0):0;pairs=same?pref.getInt("pairs",0):0;

@@ -34,11 +34,15 @@ final class NatSplitScreen {
  }
  static boolean enabled(Activity a){State s=states.get(a);return s!=null&&s.requested;}
  static String status(Activity a){State s=states.get(a);return s==null?"Waiting for map":s.reason;}
- static void toggle(Activity a){
+ static void toggle(Activity a){toggle(a,true);}
+ static void temporaryToggle(Activity a){toggle(a,false);}
+ private static void toggle(Activity a,boolean remember){
   if(a==null||a.isFinishing()||a.isDestroyed()||!a.hasWindowFocus())return;
   State s=states.get(a);if(s==null){s=new State();states.put(a,s);}
   View root=a.getWindow().peekDecorView();if(root!=null)NatNavigationCard.invalidateSplitRead(root);
   boolean on=!s.requested;restore(s);s.requested=on;s.blocked=null;s.retryAt=0;
+  s.resumeChecked=true;
+  if(remember)customPrefs(a).edit().putBoolean("last_split",on).apply();
   s.reason=on?"Split requested":"Full Map requested";
   if(on){
    refresh(a,a.getWindow().peekDecorView());
@@ -49,12 +53,12 @@ final class NatSplitScreen {
  private static int dp(Context c,int n){return Math.round(n*c.getResources().getDisplayMetrics().density);}
  private static final class State {
   FrameLayout host;View nativeView;FrameLayout.LayoutParams original,applied;
-  LinearLayout panel,footer,detailsBody;Button evButton;TextView soc,arrival,arrivalLabel,speed,power,remaining,rate,distance,eta,gps,byd,heading;
+  LinearLayout panel,footer,detailsBody;TextView driverSummary;Button evButton,smartButton;TextView soc,arrival,arrivalLabel,speed,power,remaining,rate,distance,eta,gps,byd,heading;
   ImageView hero;TextView range,odo,acDriver,acPassenger,todayKm,todayEnergy,tariff,todayCost,dayNote,outside,battTemp,soh,tyresFront,tyresRear;LocationManager lm;LocationListener listener;
   WeakReference<View> blocked;int blockedW,blockedH;
   long bearingAt=-1,fixAt=-1,started,lastEvidence=-1,retryAt;
   double bearing=Double.NaN,turn=Double.NaN;
-  boolean dark,requested;String reason="Full Map (default)";
+  boolean dark,requested,resumeChecked;String reason="Full Map (default)";
  }
  private static boolean shown(View v){return v!=null&&v.isShown()&&v.getAlpha()>0&&v.getWidth()>0&&v.getHeight()>0;}
  private static String id(View v){try{return v.getId()==View.NO_ID?"":v.getResources().getResourceEntryName(v.getId());}catch(RuntimeException ignored){return "";}}
@@ -80,7 +84,7 @@ final class NatSplitScreen {
  }
  private static void removeUi(State s){
   NatV33Telemetry.stop();
-  remove(s.panel);remove(s.footer);s.panel=s.footer=s.detailsBody=null;s.hero=null;s.evButton=null;
+  remove(s.panel);remove(s.footer);s.panel=s.footer=s.detailsBody=null;s.hero=null;s.evButton=null;s.smartButton=null;s.driverSummary=null;
   s.range=s.odo=s.acDriver=s.acPassenger=s.todayKm=s.todayEnergy=s.tariff=s.todayCost=s.dayNote=s.outside=s.battTemp=s.soh=s.tyresFront=s.tyresRear=null;
   s.soc=s.arrival=s.arrivalLabel=s.speed=s.power=s.remaining=s.rate=s.distance=s.eta=s.gps=s.byd=s.heading=null;
  }
@@ -113,6 +117,7 @@ final class NatSplitScreen {
  static void refresh(Activity a,View root){
   if(a==null)return;if(a.isDestroyed()||a.isFinishing()){clear(a);return;}
   State s=states.get(a);if(s==null){s=new State();states.put(a,s);}
+  if(!s.resumeChecked&&a.hasWindowFocus()){s.resumeChecked=true;s.requested=customPrefs(a).getBoolean("resume",false)&&customPrefs(a).getBoolean("last_split",false)&&!NatMinimalEv.evMode(a);}
   if(!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY)||!NatMinimalEv.enabled(a)){if(s.nativeView!=null)restore(s);s.requested=false;return;}
   if(root==null||!a.hasWindowFocus()){suspend(a);return;}
   try{
@@ -202,7 +207,7 @@ final class NatSplitScreen {
  private static void build(Activity a,State s,int width,int mapH,int footerH){
   s.dark=ColorScheme.nightColors(a);
   LinearLayout panel=vertical(a);panel.setTag(OWN);panel.setBackgroundColor(surface(s));panel.setPadding(dp(a,6),dp(a,5),dp(a,6),dp(a,4));s.panel=panel;
-  add(panel,text(a,"BYD SEAL  •  NAT V3.7",14,fg(s),true),dp(a,24));
+  add(panel,text(a,"BYD SEAL  •  NAT V4.0 Candidate",14,fg(s),true),dp(a,24));
   s.hero=new ImageView(a);s.hero.setScaleType(ImageView.ScaleType.FIT_CENTER);
   s.hero.setContentDescription("BYD Seal blue, static studio image");s.hero.setImageBitmap(NatSealHero.bitmap());
   s.hero.setBackground(bg(a,0xff071522,0,8));s.hero.setClipToOutline(true);
@@ -219,6 +224,7 @@ final class NatSplitScreen {
   // Battery cards remain outside the scrollable details, even on smaller displays.
   ScrollView details=new ScrollView(a);details.setFillViewport(true);panel.addView(details,new LinearLayout.LayoutParams(-1,0,1));
   LinearLayout body=vertical(a);s.detailsBody=body;details.addView(body,new ScrollView.LayoutParams(-1,-2));
+  s.driverSummary=text(a,"",14,fg(s),true);s.driverSummary.setGravity(Gravity.START);s.driverSummary.setPadding(dp(a,6),dp(a,6),dp(a,6),dp(a,6));add(body,s.driverSummary,-2);s.driverSummary.setVisibility(View.GONE);
   int metricsH=dp(a,46);
   LinearLayout m0=row(a);m0.setTag("nat_custom_range");add(body,m0,metricsH);s.range=metric(a,s,m0,"ระยะที่ขับได้ (ประมาณ)",green(s),false,false);s.odo=metric(a,s,m0,"เลขไมล์สะสม ODO",fg(s),false,false);
   LinearLayout m1=row(a);m1.setTag("nat_custom_power");add(body,m1,metricsH);s.speed=metric(a,s,m1,"ความเร็ว",fg(s),false,false);s.power=metric(a,s,m1,"POWER / REGEN (เฉลี่ย)",fg(s),false,false);
@@ -238,7 +244,8 @@ final class NatSplitScreen {
   applyCustom(a,s);
   LinearLayout footer=row(a);footer.setTag(OWN);footer.setBackgroundColor(surface(s));footer.setPadding(dp(a,3),0,dp(a,3),0);s.footer=footer;
   action(a,s,footer,"Snow AI",8,()->NatV36Shortcuts.snow(a));
-  action(a,s,footer,"Smart EV",6,()->NatSmartEvMenu.show(a));
+  s.smartButton=action(a,s,footer,"Smart EV",6,()->NatSmartEvMenu.show(a));
+  s.smartButton.setTooltipText("Smart EV • hold: Driver Mode");s.smartButton.setOnLongClickListener(v->{NatDriverWork.show(a);return true;});
   s.evButton=action(a,s,footer,"EV Charging",0,()->NatMinimalEv.splitAction(a,0));
   action(a,s,footer,"OverDrive",7,()->NatV36Shortcuts.control(a));
   action(a,s,footer,"Favorites",2,()->NatFavorites.show(a));
@@ -252,7 +259,15 @@ final class NatSplitScreen {
  private static android.content.SharedPreferences customPrefs(Activity a){return a.getSharedPreferences("nat_v36_dashboard",0);}
  private static void applyCustom(Activity a,State s){
   if(s.detailsBody==null)return;
-  for(String k:CUSTOM_KEYS){View v=s.detailsBody.findViewWithTag("nat_custom_"+k);if(v!=null)v.setVisibility(customPrefs(a).getBoolean(k,true)?View.VISIBLE:View.GONE);}
+  boolean driver=NatDriverWork.dashboard(a),clean=customPrefs(a).getBoolean("minimal_drive",false);
+  for(int i=0;i<s.detailsBody.getChildCount();i++){View v=s.detailsBody.getChildAt(i);Object tag=v.getTag();boolean show=!driver;if(v==s.driverSummary)show=driver;else if(tag instanceof String&&((String)tag).startsWith("nat_custom_")){String key=((String)tag).substring(11);show=!driver&&customPrefs(a).getBoolean(key,true)&&(!clean||key.equals("power")||key.equals("route"));}else if(clean)show=false;v.setVisibility(show?View.VISIBLE:View.GONE);}
+  if(s.driverSummary!=null&&driver)set(s.driverSummary,NatDriverWork.summary(a));
+ }
+ static void personalize(Activity a){
+  if(!active(a)||!a.hasWindowFocus())return;
+  String[] names={"จำหน้าจอ Split เมื่อเปิดใหม่","Smart Driving • ซ่อนรายละเอียดเสริม","Driver Dashboard"};
+  boolean[] values={customPrefs(a).getBoolean("resume",false),customPrefs(a).getBoolean("minimal_drive",false),NatDriverWork.dashboard(a)};
+  new android.app.AlertDialog.Builder(a).setTitle("Personalization • ตั้งค่าขณะจอด").setMultiChoiceItems(names,values,(d,i,b)->values[i]=b).setNegativeButton("ยกเลิก",null).setPositiveButton("บันทึก",(d,w)->{customPrefs(a).edit().putBoolean("resume",values[0]).putBoolean("last_split",enabled(a)).putBoolean("minimal_drive",values[1]).apply();NatDriverWork.dashboard(a,values[2]);State s=states.get(a);if(s!=null)applyCustom(a,s);}).show();
  }
  static void customize(Activity a){
   if(!active(a)||!a.hasWindowFocus())return;
@@ -361,6 +376,7 @@ final class NatSplitScreen {
   set(s.gps,gps);s.gps.setTextColor("FIX".equals(gps)?green(s):muted(s));
   String byd="—";try{org.json.JSONObject v=BydBatteryPatch.diagnosticSnapshot();String state=v.optString("status","unknown");byd="fresh".equals(state)?"Fresh":state.equals("inactive")?"Inactive":"No fresh data";}catch(Exception ignored){}
   set(s.byd,byd);s.byd.setTextColor("Fresh".equals(byd)?green(s):muted(s));
+  applyCustom(a,s);
 
  }
  private static final class Icon extends Drawable {

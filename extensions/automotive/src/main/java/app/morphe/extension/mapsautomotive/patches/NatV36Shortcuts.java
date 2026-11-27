@@ -50,6 +50,23 @@ final class NatV36Shortcuts {
   String[] labels=new String[list.size()];for(int i=0;i<labels.length;i++)labels[i]=list.get(i).loadLabel(a.getPackageManager())+" ("+list.get(i).activityInfo.packageName+")";
   new AlertDialog.Builder(a).setTitle("เลือกแอป OverDrive • ตั้งค่าขณะจอด").setItems(labels,(d,i)->{ResolveInfo item=list.get(i);a.getSharedPreferences("nat_app_shortcuts",0).edit().putString("overdrive",key(item)).apply();launch(a,item);}).setNegativeButton("ยกเลิก",null).show();
  }
+ static void favoriteApps(Activity a){
+  if(!ready(a))return;
+  android.content.SharedPreferences p=a.getSharedPreferences("nat_app_shortcuts",0);
+  ArrayList<ResolveInfo> list=overdrive(a,true);
+  String[] labels=new String[4];
+  for(int i=0;i<labels.length;i++){String saved=p.getString("favorite_"+i,"");labels[i]="Slot "+(i+1)+" • ตั้งค่า";for(ResolveInfo item:list)if(key(item).equals(saved)){labels[i]="Slot "+(i+1)+" • "+item.loadLabel(a.getPackageManager());break;}}
+  new AlertDialog.Builder(a).setTitle("Favorite Apps • 4 slots").setItems(labels,(d,slot)->{
+   ResolveInfo found=null;for(ResolveInfo item:list)if(key(item).equals(p.getString("favorite_"+slot,"")))found=item;
+   final ResolveInfo selected=found;
+   new AlertDialog.Builder(a).setTitle(labels[slot]).setItems(new String[]{"เปิดแอป","เลือกแอปใหม่","ล้างปุ่ม"},(dd,choice)->{
+    if(choice==0){if(selected!=null)launch(a,selected);else Toast.makeText(a,"ยังไม่ได้เลือกแอป",Toast.LENGTH_SHORT).show();}
+    if(choice==2)p.edit().remove("favorite_"+slot).apply();
+    if(choice==1){String[] names=new String[list.size()];for(int i=0;i<names.length;i++)names[i]=list.get(i).loadLabel(a.getPackageManager())+" ("+list.get(i).activityInfo.packageName+")";
+     new AlertDialog.Builder(a).setTitle("เลือกแอป • ขณะจอด").setItems(names,(ddd,i)->p.edit().putString("favorite_"+slot,key(list.get(i))).apply()).setNegativeButton("ยกเลิก",null).show();}
+   }).setNegativeButton("ปิด",null).show();
+  }).setNegativeButton("ปิด",null).show();
+ }
  static void configureOverDrive(Activity a){if(ready(a))chooseOverDrive(a,overdrive(a,true));}
  static void control(Activity a){
   if(!ready(a))return;

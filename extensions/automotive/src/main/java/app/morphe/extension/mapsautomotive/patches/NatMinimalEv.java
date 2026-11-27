@@ -138,14 +138,14 @@ final class NatMinimalEv {
     private static void exitEv(Activity a,State s){
         boolean split=s.restoreSplit;s.evMode=false;s.restoreSplit=false;
         if(!setLayer(a,s,false))toast(a,"ยังยืนยันการซ่อนหมุดไม่ได้ • ใช้ปุ่มของ Maps");
-        if(split&&!NatSplitScreen.enabled(a))NatSplitScreen.toggle(a);
+        if(split&&!NatSplitScreen.enabled(a))NatSplitScreen.temporaryToggle(a);
     }
     private static void layer(Activity a,State s){
         if(a.isFinishing()||a.isDestroyed()||!a.hasWindowFocus()||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY))return;
         if(s.evMode){exitEv(a,s);return;}
         if(!setLayer(a,s,true)){toast(a,"Maps ยังไม่รองรับการเปิด EV Layer • ใช้การค้นหาสถานีใน Maps");return;}
         s.restoreSplit=NatSplitScreen.active(a);s.evMode=true;
-        if(s.restoreSplit)NatSplitScreen.toggle(a);
+        if(s.restoreSplit)NatSplitScreen.temporaryToggle(a);
         report(s,"EV Full Map requested; native markers not yet visually verified");
     }
     private static void act(Activity a,State state,boolean clean){
