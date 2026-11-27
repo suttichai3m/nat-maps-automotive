@@ -4,7 +4,7 @@ import java.util.function.Predicate;
 
 /** Pure geometry shared by the Android toolbar and regression tests. */
 final class NatToolbarLayout {
-    static final int LEGACY_COUNT=4, FULL_COUNT=5;
+    static final int LEGACY_COUNT=4, FULL_COUNT=5, SPLIT_COUNT=6, IDLE_SPLIT_COUNT=2;
     private NatToolbarLayout(){}
     static final class Slot {
         final int x,y,w,h,count;final boolean vertical;
@@ -16,8 +16,15 @@ final class NatToolbarLayout {
         return choosePreferred(mapControls,routeControls,left,top,right,bottom,size,gap,edge,false,free);
     }
     static Slot choosePreferred(boolean mapControls,boolean routeControls,int left,int top,int right,int bottom,int size,int gap,int edge,boolean leftFirst,Predicate<Slot> free){
+        return chooseCounts(mapControls,left,top,right,bottom,size,gap,edge,leftFirst,free,routeControls?new int[]{FULL_COUNT,LEGACY_COUNT}:new int[]{1});
+    }
+    /** Six keys in navigation, Diagnostics + Split when idle. Prefer vertical placement; never cover native controls. */
+    static Slot chooseWithSplit(boolean mapControls,boolean routeControls,int left,int top,int right,int bottom,int size,int gap,int edge,boolean leftFirst,Predicate<Slot> free){
+        return chooseCounts(mapControls,left,top,right,bottom,size,gap,edge,leftFirst,free,routeControls?new int[]{SPLIT_COUNT,FULL_COUNT,LEGACY_COUNT}:new int[]{IDLE_SPLIT_COUNT,1});
+    }
+    private static Slot chooseCounts(boolean mapControls,int left,int top,int right,int bottom,int size,int gap,int edge,boolean leftFirst,Predicate<Slot> free,int[] counts){
         if(!mapControls||right<=left||bottom<=top||size<=0||gap<0||edge<0||free==null)return null;
-        for(int count:routeControls?new int[]{FULL_COUNT,LEGACY_COUNT}:new int[]{1}){
+        for(int count:counts){
             long len=(long)size*count+(long)gap*(count-1);
             if(len>Integer.MAX_VALUE)continue;
             int length=(int)len;
@@ -41,6 +48,7 @@ final class NatToolbarLayout {
         Slot slot=new Slot((int)x,(int)y,width,height,0,false);
         return free.test(slot)?slot:null;
     }
-    static boolean hasDiagnostics(int count){return count==1||count==FULL_COUNT;}
-    static int diagnosticIndex(int count){return count==1?0:count==FULL_COUNT?LEGACY_COUNT:-1;}
+    static boolean hasDiagnostics(int count){return diagnosticIndex(count)>=0;}
+    static int diagnosticIndex(int count){return count==1||count==IDLE_SPLIT_COUNT?0:count==FULL_COUNT||count==SPLIT_COUNT?LEGACY_COUNT:-1;}
+    static int splitIndex(int count){return count==IDLE_SPLIT_COUNT?1:count==SPLIT_COUNT?5:-1;}
 }

@@ -173,6 +173,7 @@ final class NatMinimalEv {
                 case "☷":for(int y=-9;y<=9;y+=9){canvas.drawCircle(-10,y,1,pen);canvas.drawLine(-4,y,11,y,pen);}break;
                 case "⊘":canvas.drawCircle(0,0,11,pen);canvas.drawLine(-8,8,8,-8,pen);break;
                 case "ⓘ":canvas.drawCircle(0,0,12,pen);canvas.drawCircle(0,-6,1,pen);canvas.drawLine(0,-1,0,7,pen);break;
+                case "▥":canvas.drawRoundRect(-13,-10,13,10,2,2,pen);canvas.drawLine(6.5f,-10,6.5f,10,pen);break;
                 default:break;
             }
             canvas.restore();
@@ -195,6 +196,13 @@ final class NatMinimalEv {
         t.setTooltipText("System Diagnostics — CPU / RAM / GPS (hold: Split / Full Map)");
         t.setOnLongClickListener(v->{NatSplitScreen.toggle(a);return true;});
         return t;
+    }
+    private static TextView splitButton(Activity a){
+        return toolbarButton(a,"▥","Split Screen 75:25",()->{
+            View root=a.getWindow().peekDecorView();
+            if(a.isFinishing()||a.isDestroyed()||!a.hasWindowFocus()||root==null||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY)||!controls(root).mapControls)return;
+            NatSplitScreen.toggle(a);
+        });
     }
     private static void switchPanel(Activity a,State s,int which){
         if(a.isFinishing()||a.isDestroyed()||!a.hasWindowFocus()||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY))return;
@@ -385,7 +393,7 @@ final class NatMinimalEv {
         NatToolbarLayout.Slot reserved=route&&!nativeCurrent(views)?NatToolbarLayout.currentBattery(bounds.left,bounds.top,bounds.right,bounds.bottom,dp(a,142),dp(a,58),edge,
                 q->free(views,new Rect(q.x,q.y,q.x+q.w,q.y+q.h),host)):null;
         final Rect batterySlot=reserved==null?null:new Rect(reserved.x,reserved.y,reserved.x+reserved.w,reserved.y+reserved.h);
-        NatToolbarLayout.Slot chosen=NatToolbarLayout.choosePreferred(c.mapControls,routeControls,
+        NatToolbarLayout.Slot chosen=NatToolbarLayout.chooseWithSplit(c.mapControls,routeControls,
                 bounds.left,bounds.top,bounds.right,bounds.bottom,size,gap,edge,true,
                 q->{Rect r=new Rect(q.x,q.y,q.x+q.w,q.y+q.h);return (batterySlot==null||!Rect.intersects(batterySlot,r))&&free(views,r,host);});
         if(chosen==null){clear(a);report(state,"Toolbar unavailable: native controls protected");return;}
@@ -398,16 +406,19 @@ final class NatMinimalEv {
             remove(bar);bar=column(a);bar.setOrientation(vertical?1:0);bar.setElevation(dp(a,5));
             TextView[] keys;
             if(chosen.count==1)keys=new TextView[]{diagnosticsButton(a,owner)};
+            else if(chosen.count==NatToolbarLayout.IDLE_SPLIT_COUNT)keys=new TextView[]{diagnosticsButton(a,owner),splitButton(a)};
             else {
                 TextView[] original={toolbarButton(a,"⚡","EV Charging",()->act(a,owner,false)),toolbarButton(a,"↗","Energy Prediction",()->switchPanel(a,owner,1)),toolbarButton(a,"☷","Charging Plan",()->switchPanel(a,owner,2)),toolbarButton(a,"⊘","Clean Mode",()->{act(a,owner,true);refresh(a,a.getWindow().peekDecorView());})};
                 keys=java.util.Arrays.copyOf(original,chosen.count);
                 if(NatToolbarLayout.hasDiagnostics(chosen.count))keys[NatToolbarLayout.diagnosticIndex(chosen.count)]=diagnosticsButton(a,owner);
+                if(NatToolbarLayout.splitIndex(chosen.count)>=0)keys[NatToolbarLayout.splitIndex(chosen.count)]=splitButton(a);
             }
             for(int i=0;i<keys.length;i++){android.widget.LinearLayout.LayoutParams lp=new android.widget.LinearLayout.LayoutParams(size,size);if(i>0){if(vertical)lp.topMargin=gap;else lp.leftMargin=gap;}bar.addView(keys[i],lp);}
             put(host,bar,slot,true);state.toolbar=new WeakReference<>(bar);state.vertical=vertical;
         }else if(state.left!=slot.left||state.top!=slot.top)put(host,bar,slot,false);
         state.left=slot.left;state.top=slot.top;
-        boolean[] activeKeys=chosen.count==1?new boolean[]{false}:new boolean[]{active,state.mode==1,state.mode==2,false,false};
+        boolean[] activeKeys=new boolean[chosen.count];
+        if(chosen.count>=NatToolbarLayout.LEGACY_COUNT){activeKeys[0]=active;activeKeys[1]=state.mode==1;activeKeys[2]=state.mode==2;}
         for(int i=0;i<chosen.count;i++){TextView t=(TextView)bar.getChildAt(i);if(t.getCurrentTextColor()!=(activeKeys[i]||dark?Color.WHITE:0xff263238)||t.isSelected()!=activeKeys[i]||t.getBackground()==null){style(t,activeKeys[i],dark,size/2);t.setSelected(activeKeys[i]);}}
         if(!routeControls)return;
         NatPrediction.Snapshot matched=NatNavigationCard.matchesForecast(root,forecast)?forecast:null;

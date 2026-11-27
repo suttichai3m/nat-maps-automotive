@@ -17,7 +17,7 @@ import java.lang.ref.WeakReference;
  * Never reparent the renderer. Restore native layout on unverified geometry.
  */
 final class NatSplitScreen {
- private static final String PREF="nat_split_v30", OWN="nat_v201_overlay";
+ private static final String OWN="nat_v201_overlay";
  private static final WeakHashMap<Activity,State> states=new WeakHashMap<>();
  private static volatile Motion sample;
  private static final class Motion {final long at;final double speed;Motion(long t,double s){at=t;speed=s;}}
@@ -32,12 +32,17 @@ final class NatSplitScreen {
   for(State s:states.values())if(s!=null&&s.host!=null&&s.nativeView!=null&&s.panel!=null&&s.host.getRootView()==root){Rect b=new Rect();if(s.nativeView.getGlobalVisibleRect(b))return b;}
   return null;
  }
- static boolean enabled(Activity a){return a.getSharedPreferences(PREF,0).getBoolean("split",true);}
+ static boolean enabled(Activity a){State s=states.get(a);return s!=null&&s.requested;}
  static String status(Activity a){State s=states.get(a);return s==null?"Waiting for map":s.reason;}
  static void toggle(Activity a){
-  boolean on=!enabled(a);a.getSharedPreferences(PREF,0).edit().putBoolean("split",on).apply();
-  State s=states.get(a);if(s!=null){restore(s);s.blocked=null;s.retryAt=0;s.reason=on?"Split requested":"Full Map requested";}
-  if(on)refresh(a,a.getWindow().peekDecorView());
+  if(a==null||a.isFinishing()||a.isDestroyed()||!a.hasWindowFocus())return;
+  State s=states.get(a);if(s==null){s=new State();states.put(a,s);}
+  boolean on=!s.requested;restore(s);s.requested=on;s.blocked=null;s.retryAt=0;
+  s.reason=on?"Split requested":"Full Map requested";
+  if(on){
+   refresh(a,a.getWindow().peekDecorView());
+   if(!active(a)){s.requested=false;restore(s);Toast.makeText(a,"Split 75:25 unavailable — Full Map",Toast.LENGTH_SHORT).show();}
+  }
  }
  private static int dp(Context c,int n){return Math.round(n*c.getResources().getDisplayMetrics().density);}
  private static final class State {
@@ -47,7 +52,7 @@ final class NatSplitScreen {
   WeakReference<View> blocked;int blockedW,blockedH;
   long bearingAt=-1,fixAt=-1,started,lastEvidence=-1,retryAt;
   double bearing=Double.NaN,turn=Double.NaN;
-  boolean dark;String reason="Waiting for map";
+  boolean dark,requested;String reason="Full Map (default)";
  }
  private static boolean shown(View v){return v!=null&&v.isShown()&&v.getAlpha()>0&&v.getWidth()>0&&v.getHeight()>0;}
  private static String id(View v){try{return v.getId()==View.NO_ID?"":v.getResources().getResourceEntryName(v.getId());}catch(RuntimeException ignored){return "";}}
@@ -96,7 +101,7 @@ final class NatSplitScreen {
  }
  private static void fail(State s,String reason,boolean block,int w,int h){
   if(block&&s.nativeView!=null){s.blocked=new WeakReference<>(s.nativeView);s.blockedW=w;s.blockedH=h;}
-  restore(s);s.retryAt=SystemClock.elapsedRealtime()+2000;
+  restore(s);s.requested=false;s.retryAt=0;
   if(!reason.equals(s.reason))ReportLog.i("NatSplitScreen",reason);
   s.reason=reason;
  }
@@ -105,7 +110,7 @@ final class NatSplitScreen {
  static void refresh(Activity a,View root){
   if(a==null)return;if(a.isDestroyed()||a.isFinishing()){clear(a);return;}
   State s=states.get(a);if(s==null){s=new State();states.put(a,s);}
-  if(!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY)||!NatMinimalEv.enabled(a)){restore(s);s.reason="Full Map / disabled";return;}
+  if(!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY)||!NatMinimalEv.enabled(a)){if(s.nativeView!=null)restore(s);s.requested=false;return;}
   if(root==null||!a.hasWindowFocus()){suspend(a);return;}
   try{
    View content=a.findViewById(android.R.id.content);
@@ -216,7 +221,7 @@ final class NatSplitScreen {
   action(a,s,footer,"Charging Plan",2,()->NatMinimalEv.splitAction(a,2));
   action(a,s,footer,"Clean",3,()->NatMinimalEv.splitAction(a,3));
   action(a,s,footer,"Diagnostics",4,()->NatMinimalEv.splitAction(a,4));
-  action(a,s,footer,"Full Map",5,()->toggle(a));
+  action(a,s,footer,"Full Map 100%",5,()->toggle(a));
   s.host.addView(footer,new FrameLayout.LayoutParams(-1,footerH,Gravity.BOTTOM|Gravity.LEFT));
  }
  private static void listen(Activity a,State s){

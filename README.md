@@ -11,7 +11,7 @@
 
 | Feature | Target | Current status |
 | --- | --- | --- |
-| Native Split Screen | Google Maps 75% / EV Dashboard 25% | Implemented in source; real head-unit layout and touch bounds unverified. Safe fallback to Full Map. |
+| Native Split Screen | Google Maps 75% / EV Dashboard 25% | Manual toggle only: Full Map on each new activity; Split button after Diagnostics (below when vertical); Full Map 100% in split footer. Safe fallback on failure. Real head-unit layout and touch bounds unverified. |
 | Arrival battery | Large signed SOC before and after Start, without duplicate icon | Existing integrated card retained; side-panel fallback added. Visual parity and duplicate suppression require vehicle testing. |
 | Current battery | Actual BYD SOC | Existing source retained; confirm against instrument cluster. |
 | EV Charging | Show/hide charging pins directly without generic Search or ending the route | Generic Search fallback removed. Direct marker integration still pending. |
@@ -32,7 +32,7 @@
 ### Release gate — not yet verified
 
 - [ ] Full Gradle / Morphe build and APK signing
-- [ ] 75:25 viewport, touch controls, Full Map recovery
+- [ ] Full Map on launch; dedicated Split button, 75:25 viewport, touch controls and Full Map recovery
 - [ ] Battery Arrival before and after Start; positive/negative values
 - [ ] EV charging pins show/hide directly; active route retained
 - [ ] Actual BYD dashboard kW matches when parked and moving
