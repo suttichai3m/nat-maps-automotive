@@ -125,6 +125,7 @@ public final class NatArrivalUi {
                         attach(root, a);
                         NatSplitScreen.refresh(a,root);
                         NatNavigationCard.refresh(root);
+                        NatSplitScreen.refreshDashboard(a,root);
                         scan(root, 0);
                         try { NatMinimalEv.refresh(a,root); } catch (RuntimeException error) { NatMinimalEv.clear(a); ReportLog.w("NatMinimalEv","Overlay refresh failed",error); }
                     } else { focused=false; NatSplitScreen.suspend(a); if(!SafeMode.on(a,SafeMode.BYD_BATTERY))NatSplitScreen.clear(a); if(root!=null){NatNavigationCard.clear(root);NatMinimalEv.clear(a);} }

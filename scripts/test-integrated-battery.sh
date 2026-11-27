@@ -310,7 +310,16 @@ public class TestNatSplitMapOriginal {
   check(NatSplitMath.side(1920,1080,540,200)==480);check(NatSplitMath.side(1280,720,540,200)==320);check(NatSplitMath.side(800,480,540,200)==200);check(NatSplitMath.side(799,480,540,200)==0);check(NatSplitMath.side(720,1280,540,200)==0);
   check(NatSplitMath.viewportHeight(720,56,260)==664);check(NatSplitMath.viewportHeight(300,56,260)==0);check(NatSplitMath.geometry(960,664,960,664,2));check(!NatSplitMath.geometry(1280,664,960,664,2));check(NatSplitMath.ownsGeometry(960,664,3,960,664,3));check(!NatSplitMath.ownsGeometry(1280,664,3,960,664,3));
   check(NatSplitMath.percent(NatSplitMath.arrival(false,92,-5)).equals("-5%"));check(NatSplitMath.percent(NatSplitMath.arrival(true,92,-5)).equals("92%"));check(NatSplitMath.percent(NatSplitMath.arrival(false,92,null)).equals("—"));check(NatSplitMath.keepViewport(false,5000,0));check(!NatSplitMath.keepViewport(false,5001,0));check(NatSplitMath.turn(350,10,50,1000)==20);check(NatSplitMath.turn(10,350,50,1000)==-20);check(Double.isNaN(NatSplitMath.turn(10,350,0,1000)));
-  System.out.println("PASS: "+n+" map-original split geometry/motion checks");
+  check(NatSplitMath.holdArrival(5000,0,1,1,19,19,"21:27","21:27"));
+  check(!NatSplitMath.holdArrival(5001,0,1,1,19,19,"21:27","21:27"));
+  check(!NatSplitMath.holdArrival(1000,0,1,2,19,19,"21:27","21:27"));
+  check(!NatSplitMath.holdArrival(1000,0,-1,-1,19,19,"21:27","21:27"));
+  check(!NatSplitMath.holdArrival(1000,0,1,1,19,25,"21:27","21:27"));
+  check(!NatSplitMath.holdArrival(1000,0,1,1,19,19,"21:27","21:30"));
+  check(!NatSplitMath.holdArrival(1000,0,1,1,19,19,null,null));
+  check(!NatSplitMath.holdArrival(1000,0,1,1,19,Double.NaN,"21:27","21:27"));
+  check(!NatSplitMath.holdArrival(0,1000,1,1,19,19,"21:27","21:27"));
+  System.out.println("PASS: "+n+" map-original split geometry/motion/arrival hold checks");
  }
 }
 JAVA

@@ -27,6 +27,10 @@
 - The existing 75:25 layout, manual Full Map switch, metric labels and their data sources, and footer actions are preserved. Parked/moving/turning status follows the existing fresh speed and GPS heading trend.
 - No external image download or new permission is required. Visual verification on BYD remains pending.
 
+## Arrival SOC continuity
+
+Candidate fix for intermittent blank values in Split Screen: dashboard updates after the native summary refresh, and can briefly hold a labelled last verified value for up to five seconds when the same visible panel and fresh matching forecast remain. Ambiguous, expired or changed-route evidence clears the held value. New regression cases cover expiry and session/route mismatch; actual BYD runtime validation is pending.
+
 ## Build and acceptance
 
 - Use only the `map-original` branch for this candidate.

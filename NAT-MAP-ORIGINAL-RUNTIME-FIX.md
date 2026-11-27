@@ -9,4 +9,6 @@ Base: faa3c9d0aa3e3993ffaf67a3885002e1ac42e46f. This change does not replace Nat
 
 - Luxury Executive visual refresh: replace low-resolution embedded car photo with a locally drawn metallic-blue Seal-inspired vector; improve metric borders and motion status legibility. Preserve the existing metric values, data sources, viewport and navigation actions. No new vehicle signal or ADAS data is claimed.
 
+- Arrival continuity candidate: refresh native summary before dashboard data; use one coherent SOC/distance/ETA read. On transient loss, hold up to five seconds only if the same visible native panel, matched fresh forecast session, agreeing forecast SOC, distance and ETA remain present; label held SOC as latest. Clear on ambiguity, focus loss, invalidation, mismatch or expiry. This does not guarantee SOC when Maps hides/removes the route summary, and no old-route carryover is intended. Added regression cases. No change to the unvalidated dashboard kW source.
+
 No full Android build, signed APK or BYD runtime validation has been performed for this commit. Do not deploy as final. Keep testing parked.

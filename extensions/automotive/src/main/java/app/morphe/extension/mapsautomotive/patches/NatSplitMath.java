@@ -11,6 +11,11 @@ final class NatSplitMath {
  static boolean validSoc(Integer value){return value!=null&&value>=-999&&value<=100;}
  static String percent(Integer v){return v==null?"—":v+"%";}
  static boolean keepViewport(boolean evidence,long now,long lastEvidence){return evidence||fresh(now,lastEvidence,5000);}
+ // A held display is only a short, labelled bridge over a native text refresh.
+ static boolean holdArrival(long now,long at,long oldSession,long newSession,double oldKm,double newKm,String oldEta,String newEta){
+  return fresh(now,at,5000)&&oldSession>=0&&oldSession==newSession&&Double.isFinite(oldKm)&&Double.isFinite(newKm)&&oldKm>=0&&newKm>=0
+   &&Math.abs(oldKm-newKm)<=Math.max(.2,oldKm*.01)&&oldEta!=null&&oldEta.equals(newEta);
+ }
  static boolean moving(double speed){return Double.isFinite(speed)&&speed>1&&speed<=250;}
 
  static int side(int width,int height,int minMap,int minSide){if(width<=0||height<=0||width<=height||minMap<=0||minSide<=0)return 0;int s=width/4;return s>=minSide&&width-s>=minMap?s:0;}

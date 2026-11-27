@@ -37,10 +37,12 @@ final class NatSplitScreen {
  static void toggle(Activity a){
   if(a==null||a.isFinishing()||a.isDestroyed()||!a.hasWindowFocus())return;
   State s=states.get(a);if(s==null){s=new State();states.put(a,s);}
+  View root=a.getWindow().peekDecorView();if(root!=null)NatNavigationCard.invalidateSplitRead(root);
   boolean on=!s.requested;restore(s);s.requested=on;s.blocked=null;s.retryAt=0;
   s.reason=on?"Split requested":"Full Map requested";
   if(on){
    refresh(a,a.getWindow().peekDecorView());
+   if(active(a)){NatNavigationCard.refresh(root);refreshDashboard(a,root);}
    if(!active(a)){s.requested=false;restore(s);Toast.makeText(a,"Split 75:25 unavailable — Full Map",Toast.LENGTH_SHORT).show();}
   }
  }
@@ -105,8 +107,8 @@ final class NatSplitScreen {
   if(!reason.equals(s.reason))ReportLog.i("NatSplitScreen",reason);
   s.reason=reason;
  }
- static void suspend(Activity a){State s=states.get(a);if(s!=null){stopGps(s);if(s.road!=null){s.road.running=false;s.road.invalidate();}}}
- static void clear(Activity a){State s=states.remove(a);if(s!=null)restore(s);}
+ static void suspend(Activity a){View root=a.getWindow().peekDecorView();if(root!=null)NatNavigationCard.invalidateSplitRead(root);State s=states.get(a);if(s!=null){stopGps(s);if(s.road!=null){s.road.running=false;s.road.invalidate();}}}
+ static void clear(Activity a){View root=a.getWindow().peekDecorView();if(root!=null)NatNavigationCard.invalidateSplitRead(root);State s=states.remove(a);if(s!=null)restore(s);}
  static void refresh(Activity a,View root){
   if(a==null)return;if(a.isDestroyed()||a.isFinishing()){clear(a);return;}
   State s=states.get(a);if(s==null){s=new State();states.put(a,s);}
@@ -154,7 +156,6 @@ final class NatSplitScreen {
     s.reason="Split attached; awaiting geometry check";
    }
    if(s.listener==null)listen(a,s);
-   update(a,s,root);
    if(now-s.started>2000)s.reason="Split 75/25 | native geometry checked | dashboard attached | "+(NatNavigationCard.recentlyVerified(root)?"route verified":"route unverified")+" | Current "+s.soc.getText()+" | Arrival "+s.arrival.getText();
   }catch(RuntimeException e){fail(s,"Full Map: split exception; restored",true,s.host==null?0:s.host.getWidth(),s.host==null?0:s.host.getHeight());ReportLog.w("NatSplitScreen","Split layout restored",e);}
  }
@@ -248,16 +249,22 @@ final class NatSplitScreen {
  }
  private static String fmt(double v,String u){return Double.isFinite(v)?String.format(Locale.US,"%.1f %s",v,u):"—";}
  private static void set(TextView v,String value){if(!value.contentEquals(v.getText()))v.setText(value);}
+ // Called after the native summary has been refreshed in this same UI tick.
+ static void refreshDashboard(Activity a,View root){
+  State s=states.get(a);if(s!=null&&active(a)&&a.hasWindowFocus())update(a,s,root);
+ }
  private static void update(Activity a,State s,View root){
   long now=SystemClock.elapsedRealtime();Motion m=sample;
   double speed=m==null||!BydBatteryPatch.isActive()?Double.NaN:NatSplitMath.speed(m.speed,now,m.at,15000);
   double turn=NatSplitMath.fresh(now,s.bearingAt,3000)&&Double.isFinite(speed)&&speed>=5?s.turn:Double.NaN;
-  NatLiveEnergy.Reading live=NatPrediction.liveReading();NatPrediction.Snapshot f=NatPrediction.freshSnapshot();boolean match=NatNavigationCard.matchesForecast(root,f);
-  Integer current=NatSplitMath.current(live.soc),nativeSoc=NatNavigationCard.verifiedSoc(root);
+  NatLiveEnergy.Reading live=NatPrediction.liveReading();NatPrediction.Snapshot f=NatPrediction.freshSnapshot();
+  NatNavigationCard.RouteRead route=NatNavigationCard.splitRead(root,f);
+  boolean match=route!=null&&f!=null&&(NatStabilityMath.matches(route.soc,route.km,f.google,f.km)||(f.charges>0&&NatStabilityMath.matches(route.soc,route.km,f.next,f.nextKm)));
+  Integer current=NatSplitMath.current(live.soc),nativeSoc=route==null?null:route.soc;
   Integer arrival=NatSplitMath.arrival(match,match?Integer.valueOf(f.google):null,nativeSoc);
   set(s.soc,NatSplitMath.percent(current));set(s.arrival,NatSplitMath.percent(arrival));
-  ((View)s.arrival.getParent()).setVisibility(NatNavigationCard.hasVisibleCard(root)?View.GONE:View.VISIBLE);
-  set(s.arrivalLabel,match?"แบตเมื่อถึงปลายทาง":"แบตเมื่อถึง (Maps)");
+  ((View)s.arrival.getParent()).setVisibility(NatNavigationCard.hasVisibleCard(root)&&(route==null||!route.held)?View.GONE:View.VISIBLE);
+  set(s.arrivalLabel,route!=null&&route.held?"แบตถึง • ล่าสุด":match?"แบตเมื่อถึงปลายทาง":"แบตเมื่อถึง (Maps)");
   s.arrival.setTextColor(arrival!=null&&arrival<20?(s.dark?0xffff9b9b:0xffb91c1c):blue(s));
   set(s.speed,fmt(speed,"km/h"));
   String motion=!Double.isFinite(speed)?"ข้อมูลความเร็ว —":speed<=1?"จอดนิ่ง  •  PARKED":!Double.isFinite(turn)?"เคลื่อนที่  •  ทิศทาง —":turn<-3?"แนวโน้มเลี้ยวซ้าย":turn>3?"แนวโน้มเลี้ยวขวา":"แนวโน้มขับตรง";
@@ -268,8 +275,8 @@ final class NatSplitScreen {
   }
   set(s.power,"—"); // No validated dashboard power signal.
   set(s.remaining,fmt(match?f.remainingKwh:Double.NaN,"kWh"));set(s.rate,fmt(match?live.rate:Double.NaN,"kWh/100km"));
-  set(s.distance,fmt(NatNavigationCard.verifiedKm(root),"km"));
-  String eta=NatNavigationCard.verifiedEta(root);set(s.eta,eta==null?"—":eta);
+  set(s.distance,fmt(route==null?Double.NaN:route.km,"km"));
+  String eta=route==null?null:route.eta;set(s.eta,eta==null?"—":eta);
   String gps;
   if(a.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)!=android.content.pm.PackageManager.PERMISSION_GRANTED)gps="No permission";
   else if(s.lm==null||!s.lm.isProviderEnabled(LocationManager.GPS_PROVIDER))gps="Unavailable";

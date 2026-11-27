@@ -161,13 +161,51 @@ final class NatNavigationCard {
     private static final WeakHashMap<View,Long> VERIFIED=new WeakHashMap<>();
     private static final WeakHashMap<View,double[]> ROUTES=new WeakHashMap<>();
     static boolean recentlyVerified(View root){Long t=VERIFIED.get(root);long now=android.os.SystemClock.elapsedRealtime();return root.hasWindowFocus()&&t!=null&&now>=t&&now-t<=2000;}
+    private static final WeakHashMap<View,RouteRead> SPLIT_READS=new WeakHashMap<>();
+    static final class RouteRead {
+        final int soc; final double km; final String eta; final long at,session; final boolean held;
+        final java.lang.ref.WeakReference<View> panel;
+        RouteRead(int soc,double km,String eta,long at,long session,View panel,boolean held){
+            this.soc=soc;this.km=km;this.eta=eta;this.at=at;this.session=session;this.panel=new java.lang.ref.WeakReference<>(panel);this.held=held;
+        }
+    }
+    static void invalidateSplitRead(View root){SPLIT_READS.remove(root);}
+    static RouteRead splitRead(View root,NatPrediction.Snapshot f){
+        if(root==null||!root.isShown()||!root.hasWindowFocus()||!SafeMode.on(root.getContext(),SafeMode.BYD_BATTERY)){SPLIT_READS.remove(root);return null;}
+        long now=android.os.SystemClock.elapsedRealtime();
+        List<Match> list=matches(root);
+        if(list.size()==1&&list.get(0).panel!=null){
+            Match m=list.get(0);double km=matchKm(m);String eta=panelEta(m.panel);
+            boolean linked=f!=null&&(NatStabilityMath.matches(m.soc,km,f.google,f.km)||(f.charges>0&&NatStabilityMath.matches(m.soc,km,f.next,f.nextKm)));
+            RouteRead read=new RouteRead(m.soc,km,eta,now,linked?f.session:-1,m.panel,false);
+            SPLIT_READS.put(root,read);return read;
+        }
+        // Never hold across ambiguous summaries, focus loss, missing panel, or a changed forecast session.
+        RouteRead last=SPLIT_READS.get(root);View panel=last==null?null:last.panel.get();
+        if(list.size()!=0||last==null||panel==null||panel.getRootView()!=root||!panel.isShown()||!panel.getGlobalVisibleRect(new Rect())||f==null){SPLIT_READS.remove(root);return null;}
+        ArrayList<TextView> parts=new ArrayList<>();collect(panel,parts,0);
+        double km=Double.NaN;int count=0;boolean contradictory=false;
+        for(TextView v:parts){
+            double d=NatArrivalUi.routeKm(v.getText());if(Double.isFinite(d)){km=d;count++;}
+            Integer soc=NatNavigationSummary.parseSocPart(v.getText());
+            if(soc!=null&&soc!=last.soc)contradictory=true;
+            Integer full=NatNavigationSummary.parse(v.getText());if(full!=null&&full!=last.soc)contradictory=true;
+        }
+        String eta=panelEta(panel);
+        boolean forecastAgrees=NatStabilityMath.matches(last.soc,last.km,f.google,f.km)||(f.charges>0&&NatStabilityMath.matches(last.soc,last.km,f.next,f.nextKm));
+        if(contradictory||count!=1||!forecastAgrees||!NatSplitMath.holdArrival(now,last.at,last.session,f.session,last.km,km,last.eta,eta)){SPLIT_READS.remove(root);return null;}
+        return new RouteRead(last.soc,km,eta,last.at,last.session,panel,true);
+    }
     static boolean hasVisibleCard(View root){Card c=CARDS.get(root);return c!=null&&!c.getBounds().isEmpty()&&c.hidden!=null;}
     static Integer verifiedSoc(View root){double[] m=ROUTES.get(root);return m!=null&&recentlyVerified(root)?(int)m[0]:null;}
     static double verifiedKm(View root){double[] m=ROUTES.get(root);return m!=null&&recentlyVerified(root)?m[1]:Double.NaN;}
     static String verifiedEta(View root){
         if(!recentlyVerified(root))return null;
         List<Match> list=matches(root);if(list.size()!=1||list.get(0).panel==null)return null;
-        List<TextView> all=new ArrayList<>();collect(list.get(0).panel,all,0);
+        return panelEta(list.get(0).panel);
+    }
+    private static String panelEta(View panel){
+        List<TextView> all=new ArrayList<>();collect(panel,all,0);
         java.util.regex.Pattern p=java.util.regex.Pattern.compile("(?<![0-9])(?:[01]?[0-9]|2[0-3]):[0-5][0-9](?:\\s*(?:AM|PM|น\\.?))?",java.util.regex.Pattern.CASE_INSENSITIVE);
         String found=null;
         for(TextView v:all){java.util.regex.Matcher q=p.matcher(NatNavigationSummary.normalize(v.getText()));while(q.find()){String x=q.group();if(found!=null&&!found.equals(x))return null;found=x;}}
