@@ -126,6 +126,16 @@ final class BydEnergyReader implements BydBatterySource {
         return sample;
     }
 
+    /** Fast cache: only the existing, known read-only SOC and speed getters. Worker thread only. */
+    NatV33Telemetry.Fast readFast() {
+        if(!ready()) return null;
+        long now=SystemClock.elapsedRealtime();
+        double soc=optionalNumber(socGetter,statistic), speed=Double.NaN;
+        if(optionalUnit(speedUnitGetter,instrument)==METRIC_UNIT&&optionalUnit(mileageUnitGetter,instrument)==METRIC_UNIT)
+            speed=optionalNumber(speedGetter,statistic);
+        return new NatV33Telemetry.Fast(now,soc>=0&&soc<=100?soc:Double.NaN,speed>=0&&speed<=250?speed:Double.NaN);
+    }
+
     /** Resolve optional methods once, without making them a battery-read dependency. */
     private void initOptional(Context context, Class<?> statisticClass) {
         if (optionalInitAttempted) return;

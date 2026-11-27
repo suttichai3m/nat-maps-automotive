@@ -50,7 +50,7 @@ final class NatSplitScreen {
  private static final class State {
   FrameLayout host;View nativeView;FrameLayout.LayoutParams original,applied;
   LinearLayout panel,footer;TextView soc,arrival,arrivalLabel,speed,power,remaining,rate,distance,eta,gps,byd,heading;
-  Road road;LocationManager lm;LocationListener listener;
+  ImageView hero;TextView range,odo,acDriver,acPassenger,todayKm,todayEnergy,tariff,todayCost,dayNote;LocationManager lm;LocationListener listener;
   WeakReference<View> blocked;int blockedW,blockedH;
   long bearingAt=-1,fixAt=-1,started,lastEvidence=-1,retryAt;
   double bearing=Double.NaN,turn=Double.NaN;
@@ -79,8 +79,9 @@ final class NatSplitScreen {
   s.listener=null;s.lm=null;s.bearingAt=s.fixAt=-1;s.bearing=s.turn=Double.NaN;
  }
  private static void removeUi(State s){
-  if(s.road!=null)s.road.running=false;
-  remove(s.panel);remove(s.footer);s.panel=s.footer=null;s.road=null;
+  NatV33Telemetry.stop();
+  remove(s.panel);remove(s.footer);s.panel=s.footer=null;s.hero=null;
+  s.range=s.odo=s.acDriver=s.acPassenger=s.todayKm=s.todayEnergy=s.tariff=s.todayCost=s.dayNote=null;
   s.soc=s.arrival=s.arrivalLabel=s.speed=s.power=s.remaining=s.rate=s.distance=s.eta=s.gps=s.byd=s.heading=null;
  }
  private static void restore(State s){
@@ -107,7 +108,7 @@ final class NatSplitScreen {
   if(!reason.equals(s.reason))ReportLog.i("NatSplitScreen",reason);
   s.reason=reason;
  }
- static void suspend(Activity a){View root=a.getWindow().peekDecorView();if(root!=null)NatNavigationCard.invalidateSplitRead(root);State s=states.get(a);if(s!=null){stopGps(s);if(s.road!=null){s.road.running=false;s.road.invalidate();}}}
+ static void suspend(Activity a){View root=a.getWindow().peekDecorView();if(root!=null)NatNavigationCard.invalidateSplitRead(root);State s=states.get(a);if(s!=null){stopGps(s);NatV33Telemetry.stop();}}
  static void clear(Activity a){View root=a.getWindow().peekDecorView();if(root!=null)NatNavigationCard.invalidateSplitRead(root);State s=states.remove(a);if(s!=null)restore(s);}
  static void refresh(Activity a,View root){
   if(a==null)return;if(a.isDestroyed()||a.isFinishing()){clear(a);return;}
@@ -200,9 +201,11 @@ final class NatSplitScreen {
  private static void build(Activity a,State s,int width,int mapH,int footerH){
   s.dark=ColorScheme.nightColors(a);
   LinearLayout panel=vertical(a);panel.setTag(OWN);panel.setBackgroundColor(surface(s));panel.setPadding(dp(a,6),dp(a,5),dp(a,6),dp(a,4));s.panel=panel;
-  add(panel,text(a,"BYD SEAL  •  NAT V3.2",14,fg(s),true),dp(a,24));
-  s.road=new Road(a);s.road.dark=s.dark;
-  int roadH=Math.min(dp(a,144),Math.max(dp(a,56),mapH/4));add(panel,s.road,roadH);
+  add(panel,text(a,"BYD SEAL  •  NAT V3.3",14,fg(s),true),dp(a,24));
+  s.hero=new ImageView(a);s.hero.setScaleType(ImageView.ScaleType.FIT_CENTER);
+  s.hero.setContentDescription("BYD Seal blue, static studio image");s.hero.setImageBitmap(NatSealHero.bitmap());
+  s.hero.setBackground(bg(a,0xff071522,0,8));s.hero.setClipToOutline(true);
+  int heroH=Math.min(dp(a,118),Math.max(dp(a,48),mapH/5));add(panel,s.hero,heroH);
   s.heading=text(a,"—",11,muted(s),true);
   s.heading.setSingleLine(true);
   s.heading.setAutoSizeTextTypeUniformWithConfiguration(9,11,1,android.util.TypedValue.COMPLEX_UNIT_SP);
@@ -215,10 +218,17 @@ final class NatSplitScreen {
   // Battery cards remain outside the scrollable details, even on smaller displays.
   ScrollView details=new ScrollView(a);details.setFillViewport(true);panel.addView(details,new LinearLayout.LayoutParams(-1,0,1));
   LinearLayout body=vertical(a);details.addView(body,new ScrollView.LayoutParams(-1,-2));
-  int metricsH=dp(a,52);
-  LinearLayout m1=row(a);add(body,m1,metricsH);s.speed=metric(a,s,m1,"ความเร็ว",fg(s),false,false);s.power=metric(a,s,m1,"กำลังไฟหน้าปัด BYD",fg(s),false,false);
-  LinearLayout m2=row(a);add(body,m2,metricsH);s.remaining=metric(a,s,m2,"พลังงานที่ต้องใช้อีก",fg(s),false,false);s.rate=metric(a,s,m2,"อัตราสิ้นเปลือง",fg(s),false,false);
+  int metricsH=dp(a,46);
+  LinearLayout m0=row(a);add(body,m0,metricsH);s.range=metric(a,s,m0,"ระยะที่ขับได้ (ประมาณ)",green(s),false,false);s.odo=metric(a,s,m0,"เลขไมล์สะสม ODO",fg(s),false,false);
+  LinearLayout m1=row(a);add(body,m1,metricsH);s.speed=metric(a,s,m1,"ความเร็ว",fg(s),false,false);s.power=metric(a,s,m1,"POWER / REGEN (เฉลี่ย)",fg(s),false,false);
+  LinearLayout m2=row(a);add(body,m2,metricsH);s.remaining=metric(a,s,m2,"พลังงานที่ต้องใช้อีก",fg(s),false,false);s.rate=metric(a,s,m2,"อัตราสิ้นเปลืองคาดการณ์",fg(s),false,false);
   LinearLayout m3=row(a);add(body,m3,metricsH);s.distance=metric(a,s,m3,"ระยะทาง (Maps)",fg(s),false,false);s.eta=metric(a,s,m3,"ถึงเวลา (Maps)",fg(s),false,false);
+  LinearLayout ac=row(a);add(body,ac,metricsH);s.acDriver=metric(a,s,ac,"แอร์คนขับ",blue(s),false,false);s.acPassenger=metric(a,s,ac,"แอร์ผู้โดยสาร",blue(s),false,false);
+  add(body,text(a,"TODAY  •  สรุปการขับวันนี้",12,fg(s),true),dp(a,22));
+  LinearLayout daily=row(a);add(body,daily,metricsH);s.todayKm=metric(a,s,daily,"ระยะทางวันนี้",fg(s),false,false);s.todayEnergy=metric(a,s,daily,"พลังงานสุทธิที่บันทึก",fg(s),false,false);
+  LinearLayout costs=row(a);add(body,costs,metricsH);s.tariff=metric(a,s,costs,"ค่าไฟ / kWh  ⚙",blue(s),false,false);s.todayCost=metric(a,s,costs,"ค่าไฟวันนี้ (ประมาณ)",green(s),false,false);
+  View tariffCell=(View)s.tariff.getParent();tariffCell.setClickable(true);tariffCell.setFocusable(true);tariffCell.setContentDescription("ตั้งราคาค่าไฟต่อ kWh");tariffCell.setOnClickListener(v->editTariff(a,s));
+  s.dayNote=text(a,"ข้อมูลตามช่วงที่แอปบันทึก",10,muted(s),false);add(body,s.dayNote,dp(a,20));
   LinearLayout m4=row(a);add(body,m4,metricsH);s.gps=metric(a,s,m4,"GPS",fg(s),false,false);s.byd=metric(a,s,m4,"ข้อมูล BYD",fg(s),false,false);
   s.host.addView(panel,new FrameLayout.LayoutParams(width,mapH,Gravity.RIGHT|Gravity.TOP));
   LinearLayout footer=row(a);footer.setTag(OWN);footer.setBackgroundColor(surface(s));footer.setPadding(dp(a,3),0,dp(a,3),0);s.footer=footer;
@@ -253,14 +263,42 @@ final class NatSplitScreen {
  static void refreshDashboard(Activity a,View root){
   State s=states.get(a);if(s!=null&&active(a)&&a.hasWindowFocus())update(a,s,root);
  }
+ private static void editTariff(Activity a,State s){
+  if(!active(a))return;
+  EditText input=new EditText(a);input.setSingleLine(true);input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+  input.setText(String.format(Locale.US,"%.2f",NatV33Telemetry.tariff(a)));input.selectAll();
+  android.app.AlertDialog dialog=new android.app.AlertDialog.Builder(a).setTitle("ตั้งราคาค่าไฟ (บาท/kWh)").setMessage("ค่าเริ่มต้น 7.00 บาท/kWh").setView(input).setNegativeButton("ยกเลิก",null).setPositiveButton("บันทึก",null).create();
+  dialog.setOnShowListener(x->dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+   double rate;try{rate=Double.parseDouble(input.getText().toString().trim());}catch(NumberFormatException e){rate=Double.NaN;}
+   if(!NatDailyMath.validRate(rate)){input.setError("กรอกมากกว่า 0 และไม่เกิน 100");return;}
+   NatV33Telemetry.tariff(a,rate);updateDaily(a,s);dialog.dismiss();
+  }));dialog.show();
+ }
+ private static void updateDaily(Activity a,State s){
+  if(s.tariff==null)return;
+  double price=NatV33Telemetry.tariff(a);NatV33Telemetry.Today t=NatV33Telemetry.today();
+  set(s.tariff,String.format(Locale.US,"฿%.2f",price));
+  set(s.todayKm,fmt(t==null?Double.NaN:t.km,"km"));set(s.todayEnergy,fmt(t==null?Double.NaN:t.kwh,"kWh"));
+  double cost=t==null?Double.NaN:NatDailyMath.cost(t.kwh,price);
+  set(s.todayCost,Double.isFinite(cost)?String.format(Locale.US,"฿%.2f",cost):"—");
+  set(s.dayNote,t==null?"รอข้อมูลวันนี้":"เฉพาะช่วงที่บันทึก • ไม่รวมการชาร์จ/ช่วงขาดข้อมูล");
+ }
+ static void refreshFast(Activity a){
+  State s=states.get(a);if(s==null||!active(a)||!a.hasWindowFocus()||!BydBatteryPatch.isActive())return;
+  NatV33Telemetry.request();NatV33Telemetry.Fast f=NatV33Telemetry.fast();
+  if(f==null)return;
+  Integer soc=NatSplitMath.current(f.soc);if(soc!=null)set(s.soc,NatSplitMath.percent(soc));
+  if(Double.isFinite(f.speed))set(s.speed,fmt(f.speed,"km/h"));
+ }
  private static void update(Activity a,State s,View root){
   long now=SystemClock.elapsedRealtime();Motion m=sample;
-  double speed=m==null||!BydBatteryPatch.isActive()?Double.NaN:NatSplitMath.speed(m.speed,now,m.at,15000);
+  NatV33Telemetry.request();NatV33Telemetry.Fast fast=NatV33Telemetry.fast();
+  double speed=fast!=null&&Double.isFinite(fast.speed)?fast.speed:m==null||!BydBatteryPatch.isActive()?Double.NaN:NatSplitMath.speed(m.speed,now,m.at,15000);
   double turn=NatSplitMath.fresh(now,s.bearingAt,3000)&&Double.isFinite(speed)&&speed>=5?s.turn:Double.NaN;
   NatLiveEnergy.Reading live=NatPrediction.liveReading();NatPrediction.Snapshot f=NatPrediction.freshSnapshot();
   NatNavigationCard.RouteRead route=NatNavigationCard.splitRead(root,f);
   boolean match=route!=null&&f!=null&&(NatStabilityMath.matches(route.soc,route.km,f.google,f.km)||(f.charges>0&&NatStabilityMath.matches(route.soc,route.km,f.next,f.nextKm)));
-  Integer current=NatSplitMath.current(live.soc),nativeSoc=route==null?null:route.soc;
+  Integer current=NatSplitMath.current(fast!=null&&Double.isFinite(fast.soc)?fast.soc:live.soc),nativeSoc=route==null?null:route.soc;
   Integer arrival=NatSplitMath.arrival(match,match?Integer.valueOf(f.google):null,nativeSoc);
   set(s.soc,NatSplitMath.percent(current));set(s.arrival,NatSplitMath.percent(arrival));
   ((View)s.arrival.getParent()).setVisibility(NatNavigationCard.hasVisibleCard(root)&&(route==null||!route.held)?View.GONE:View.VISIBLE);
@@ -273,8 +311,15 @@ final class NatSplitScreen {
    set(s.heading,motion);s.heading.setTextColor(motionColor);
    s.heading.setBackground(bg(a,s.dark?0xff1a2c3b:0xfff8fbfc,s.dark?0xff344a5d:0xffcddbe4,10));
   }
-  set(s.power,"—"); // No validated dashboard power signal.
-  set(s.remaining,fmt(match?f.remainingKwh:Double.NaN,"kWh"));set(s.rate,fmt(match?live.rate:Double.NaN,"kWh/100km"));
+  NatV33Telemetry.Slow tele=BydBatteryPatch.isActive()?NatV33Telemetry.slow():null;
+  double kw=tele==null?Double.NaN:tele.kw;
+  set(s.power,Double.isFinite(kw)?String.format(Locale.US,"%+.1f kW",kw):"—");s.power.setTextColor(Double.isFinite(kw)&&kw<0?green(s):fg(s));
+  set(s.range,fmt(tele==null?Double.NaN:tele.range,"km"));
+  set(s.odo,tele!=null&&Double.isFinite(tele.odo)?String.format(Locale.US,"%,.1f km",tele.odo):"—");
+  // The SDK setpoint and its scale are not validated on this firmware. Do not show fake AC values.
+  set(s.acDriver,"—");set(s.acPassenger,"—");updateDaily(a,s);
+  set(s.remaining,fmt(match?f.remainingKwh:Double.NaN,"kWh"));
+  set(s.rate,fmt(match?NatDailyMath.forecastRate(f.remainingKwh,f.km):Double.NaN,"kWh/100km"));
   set(s.distance,fmt(route==null?Double.NaN:route.km,"km"));
   String eta=route==null?null:route.eta;set(s.eta,eta==null?"—":eta);
   String gps;
@@ -284,7 +329,7 @@ final class NatSplitScreen {
   set(s.gps,gps);s.gps.setTextColor("FIX".equals(gps)?green(s):muted(s));
   String byd="—";try{org.json.JSONObject v=BydBatteryPatch.diagnosticSnapshot();String state=v.optString("status","unknown");byd="fresh".equals(state)?"Fresh":state.equals("inactive")?"Inactive":"No fresh data";}catch(Exception ignored){}
   set(s.byd,byd);s.byd.setTextColor("Fresh".equals(byd)?green(s):muted(s));
-  s.road.speed=speed;s.road.turn=turn;s.road.lastData=now;s.road.running=true;s.road.invalidate();
+
  }
  private static final class Icon extends Drawable {
   final int kind,color;final Paint p=new Paint(3);
@@ -299,77 +344,5 @@ final class NatSplitScreen {
     default:c.drawRoundRect(-11,-9,11,9,2,2,p);c.drawLine(3,-9,3,9,p);
    }c.restore();}
   public void setAlpha(int a){}public void setColorFilter(ColorFilter f){}public int getOpacity(){return PixelFormat.TRANSLUCENT;}
- }
- private static final class Road extends View {
-  // Resolution-independent, original stylized Seal side profile. No tiny bitmap,
-  // network dependency, camera feed or simulated ADAS information.
-  final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
-  final Path body=new Path(),glass=new Path(),hood=new Path(),lower=new Path(),belt=new Path(),frontLamp=new Path(),rearLamp=new Path(),sill=new Path(),mirror=new Path();
-  final Shader bodyPaint=new LinearGradient(0,27,0,91,new int[]{0xffa2d0fa,0xff477eae,0xff244d78,0xff172e4c},new float[]{0,.32f,.68f,1},Shader.TileMode.CLAMP);
-  final Shader glassPaint=new LinearGradient(0,27,0,57,0xff39536d,0xff101b2b,Shader.TileMode.CLAMP);
-  final Shader chrome=new LinearGradient(0,-16,0,16,0xffc4d5e4,0xff506174,Shader.TileMode.CLAMP);
-  final Shader shadow=new RadialGradient(0,0,1,new int[]{0x99000000,0x00000000},null,Shader.TileMode.CLAMP);
-  final Shader nightStudio=new LinearGradient(0,0,0,112,new int[]{0xff132235,0xff21394d,0xff101b29},null,Shader.TileMode.CLAMP);
-  final Shader dayStudio=new LinearGradient(0,0,0,112,new int[]{0xffe7f0f5,0xffcbdde8,0xffb6cbd7},null,Shader.TileMode.CLAMP);
-  double speed=Double.NaN,turn=Double.NaN;boolean running,dark;long last,lastData;float phase;
-  Road(Context c){
-   super(c);setContentDescription("Stylized BYD Seal side profile on decorative road; GPS heading trend only, not ADAS");
-   // Low bonnet, long wheelbase, fastback roof, short rear deck.
-   body.moveTo(12,76);body.cubicTo(11,66,16,57,24,54);body.cubicTo(32,49,47,47,59,43);
-   body.cubicTo(76,28,95,22,121,22);body.cubicTo(147,22,164,32,184,46);
-   body.cubicTo(197,51,217,52,228,60);body.cubicTo(237,66,238,75,233,84);
-   body.lineTo(221,88);body.cubicTo(220,68,191,65,184,88);body.lineTo(65,88);
-   body.cubicTo(61,66,31,66,27,88);body.lineTo(16,85);body.close();
-   glass.moveTo(64,44);glass.cubicTo(80,32,99,27,121,27);glass.cubicTo(144,27,160,36,174,46);
-   glass.lineTo(161,49);glass.lineTo(78,49);glass.close();
-   hood.moveTo(16,62);hood.cubicTo(56,51,107,53,164,53);hood.cubicTo(195,52,220,57,232,65);
-   lower.moveTo(16,77);lower.lineTo(27,80);lower.cubicTo(35,62,59,65,67,83);lower.lineTo(183,83);
-   lower.cubicTo(192,64,215,66,223,80);lower.lineTo(235,76);
-   belt.moveTo(65,60);belt.cubicTo(105,56,145,56,184,60);
-   sill.moveTo(69,82);sill.cubicTo(110,85,148,85,181,81);
-   frontLamp.moveTo(217,59);frontLamp.lineTo(231,64);frontLamp.lineTo(230,67);frontLamp.lineTo(215,64);frontLamp.close();
-   rearLamp.moveTo(15,59);rearLamp.lineTo(33,56);rearLamp.lineTo(32,60);rearLamp.lineTo(15,63);rearLamp.close();
-   mirror.moveTo(165,47);mirror.cubicTo(171,44,181,44,181,48);mirror.lineTo(174,52);mirror.lineTo(166,52);mirror.close();
-  }
-  void color(int c){p.setShader(null);p.setColor(c);p.setStyle(Paint.Style.FILL);}
-  void fill(Canvas c,Path path,Shader shader){color(0xffffffff);p.setShader(shader);c.drawPath(path,p);p.setShader(null);}
-  void stroke(Canvas c,Path path,int col,float width){color(col);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(width);p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeJoin(Paint.Join.ROUND);c.drawPath(path,p);p.setStyle(Paint.Style.FILL);}
-  void wheel(Canvas c,float x,float y,float spin){
-   c.save();c.translate(x,y);color(0xff0a1019);c.drawCircle(0,0,18,p);
-   color(0xff273342);c.drawCircle(0,0,14.5f,p);
-   color(0xffffffff);p.setShader(chrome);c.drawCircle(0,0,12.4f,p);p.setShader(null);
-   color(0xff142233);c.drawCircle(0,0,10.5f,p);
-   c.rotate(spin);
-   for(int i=0;i<5;i++){c.save();c.rotate(i*72);color(0xffb4c6d6);c.drawRoundRect(-1.8f,-11,1.8f,-3,1.3f,1.3f,p);c.restore();}
-   color(0xff92a8bd);c.drawCircle(0,0,3.7f,p);color(0xff314357);c.drawCircle(0,0,1.7f,p);c.restore();
-  }
-  protected void onDraw(Canvas c){
-   super.onDraw(c);float w=getWidth(),h=getHeight();if(w<=0||h<=0)return;
-   long now=SystemClock.elapsedRealtime();boolean move=running&&NatSplitMath.fresh(now,lastData,2000)&&NatSplitMath.moving(speed)&&hasWindowFocus();
-   if(move)phase=(phase+Math.min(100,Math.max(0,now-last))*((float)speed/100))%360;last=now;
-   float k=Math.min(w/260f,h/112f);
-   c.save();c.translate((w-260*k)/2,(h-112*k)/2);c.scale(k,k);
-   // Paint the studio background across the full view, even at unusual aspect ratios.
-   color(0xffffffff);p.setShader(dark?nightStudio:dayStudio);c.drawRect(-w/k, -h/k,260+w/k,112+h/k,p);p.setShader(null);
-   float angle=move&&Double.isFinite(turn)?(float)turn:0;
-   // Animated dashed line represents motion only; it is not a detected lane.
-   c.save();c.translate(130,99);c.rotate(angle*.12f);
-   color(dark?0xff263d50:0xff9fb6c5);c.drawRoundRect(-160,-5,160,17,4,4,p);
-   color(dark?0xff5b829c:0xffeaf4f8);for(float xx=-180-(phase%44);xx<180;xx+=44)c.drawRoundRect(xx,9,xx+23,10.6f,1,1,p);
-   c.restore();
-   c.save();c.translate(130,91);c.scale(104,9);color(0xffffffff);p.setShader(shadow);c.drawCircle(0,0,1,p);p.setShader(null);c.restore();
-   // Subtle body tilt, clamped by the existing GPS trend math; no motion when parked.
-   c.save();c.translate(130,61);c.rotate(angle*.075f);c.translate(-130,-61);c.translate(8,-1);
-   fill(c,body,bodyPaint);stroke(c,body,dark?0xff7d9ebd:0xff375778,1.05f);
-   fill(c,glass,glassPaint);stroke(c,glass,0xff92a8ba,1.0f);
-   color(0xff192d42);c.drawLine(112,27,114,48,p);c.drawLine(147,34,143,48,p);
-   stroke(c,hood,0x88d4eaff,1.1f);stroke(c,lower,0xff233e59,2.1f);stroke(c,belt,0xff95b9d7,.75f);stroke(c,sill,0xff82a8cb,1.15f);
-   color(0xff243e5a);c.drawRoundRect(92,58,108,60,1,1,p);c.drawRoundRect(143,58,159,60,1,1,p);
-   fill(c,mirror,bodyPaint);stroke(c,mirror,0xff344e69,.9f);
-   color(0xffff6974);c.drawPath(rearLamp,p);color(0xffe6f7ff);c.drawPath(frontLamp,p);
-   float spin=move?phase*3:0;wheel(c,46,86,spin);wheel(c,202,86,spin);
-   c.restore();c.restore();
-   if(move&&isShown())postInvalidateDelayed(100);
-  }
  }
 }

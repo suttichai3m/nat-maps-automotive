@@ -318,6 +318,7 @@ public final class BydBatteryPatch {
             worker.post(() -> BydDriveLog.initialize(base));
             // The BYD SDK needs the application context, which exists once the Application is created.
             worker.postDelayed(BydBatteryPatch::poll, START_DELAY_MS);
+            worker.postDelayed(BydBatteryPatch::pollNatFast, START_DELAY_MS+500);
             ReportLog.i(TAG, "BYD battery on" + (sdk ? "" : " (TS car adapter)") + ": " + modelUri);
         } catch (Throwable error) {
             active = false;
@@ -482,6 +483,16 @@ public final class BydBatteryPatch {
         // Battery on the phone: a lower whole percent in Maps' model makes Maps upload it soon (never throws).
         PhoneBattery.modelRead(sampleSoc);
         return new ByteArrayInputStream(model);
+    }
+
+    // Separate lightweight cache; do not accelerate model generation, drive logging or calibration.
+    private static void pollNatFast(){
+        if(!active)return;
+        try{
+            if(NatV33Telemetry.wanted(SystemClock.elapsedRealtime())&&reader instanceof BydEnergyReader)
+                NatV33Telemetry.fast(((BydEnergyReader)reader).readFast());
+        }catch(Throwable ignored){NatV33Telemetry.fast(null);}
+        if(worker!=null)worker.postDelayed(BydBatteryPatch::pollNatFast,500);
     }
 
     // Worker thread only.
@@ -701,6 +712,7 @@ public final class BydBatteryPatch {
             record.mileage01km = sample.mileage;
             record.speedKmh = sample.speedKmh;
             NatSplitScreen.observe(record.elapsed,record.speedKmh);
+            try { NatV33Telemetry.sample(context,sample); } catch(RuntimeException ignored) { /* optional daily cache */ }
             if (outsideC != BydOutsideTemperature.UNAVAILABLE) record.outsideC = outsideC;
             BydBatteryHealth.Raw temperatures = sampleTemperatures;
             if (temperatures != null && temperatures.average != BydBatteryHealth.UNAVAILABLE) record.batteryTempRaw = temperatures.average;

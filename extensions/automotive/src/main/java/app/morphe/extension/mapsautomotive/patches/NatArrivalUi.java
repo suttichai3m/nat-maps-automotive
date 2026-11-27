@@ -113,6 +113,13 @@ public final class NatArrivalUi {
         ReportLog.i("NatArrivalUi", "V3.1 integrated navigation battery hook installed");
         WeakReference<Activity> ref = new WeakReference<>(activity);
         MAIN.postDelayed(new Runnable() {
+            public void run(){
+                Activity a=ref.get();if(a==null||a.isDestroyed()||a.isFinishing())return;
+                try{NatSplitScreen.refreshFast(a);}catch(RuntimeException ignored){}
+                MAIN.postDelayed(this,500);
+            }
+        },500);
+        MAIN.postDelayed(new Runnable() {
             boolean focused;
             @Override public void run() {
                 Activity a = ref.get();
