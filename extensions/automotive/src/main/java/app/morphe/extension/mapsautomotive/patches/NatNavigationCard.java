@@ -161,6 +161,7 @@ final class NatNavigationCard {
     private static final WeakHashMap<View,Long> VERIFIED=new WeakHashMap<>();
     private static final WeakHashMap<View,double[]> ROUTES=new WeakHashMap<>();
     static boolean recentlyVerified(View root){Long t=VERIFIED.get(root);long now=android.os.SystemClock.elapsedRealtime();return root.hasWindowFocus()&&t!=null&&now>=t&&now-t<=2000;}
+    static Integer verifiedSoc(View root){double[] m=ROUTES.get(root);return m!=null&&recentlyVerified(root)?(int)m[0]:null;}
     static boolean matchesForecast(View root,NatPrediction.Snapshot f){
         double[] m=ROUTES.get(root);if(f==null||m==null||!recentlyVerified(root))return false;
         return NatStabilityMath.matches((int)m[0],m[1],f.google,f.km)||(f.charges>0&&NatStabilityMath.matches((int)m[0],m[1],f.next,f.nextKm));
@@ -291,6 +292,9 @@ final class NatNavigationCard {
         if (!root.isShown() || !root.hasWindowFocus() || !SafeMode.on(root.getContext(), SafeMode.BYD_BATTERY)) { clear(root); status(root,"inactive"); return; }
         List<Match> matches=matches(root);
         if(matches.size()==1&&matches.get(0).panel!=null){VERIFIED.put(root,android.os.SystemClock.elapsedRealtime());ROUTES.put(root,new double[]{matches.get(0).soc,matchKm(matches.get(0))});}else{VERIFIED.remove(root);ROUTES.remove(root);}
+        if(NatMinimalEv.enabled(root.getContext())){
+            clear(root);status(root,"Persistent independent SOC mode; native summary retained");return;
+        }
         if(matches.size()!=1) { clear(root); status(root,matches.isEmpty()?"no verified summary":"ambiguous summaries"); return; }
         Match match=matches.get(0); TextView tv=match.anchor; int soc=match.soc;
         Rect visible=new Rect(), viewport=new Rect(); Point offset=new Point();

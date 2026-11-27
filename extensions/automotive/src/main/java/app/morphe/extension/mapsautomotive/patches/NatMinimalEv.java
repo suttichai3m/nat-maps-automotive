@@ -23,8 +23,8 @@ final class NatMinimalEv {
     private static final String PREF="nat_minimal_ev";
     private static final WeakHashMap<Activity,State> STATES=new WeakHashMap<>();
     private static final class State {
-        WeakReference<android.widget.LinearLayout> toolbar,panel,current,remaining;
-        String currentKey="",remainingKey="";
+        WeakReference<android.widget.LinearLayout> toolbar,panel,current,remaining,arrival;
+        String currentKey="",remainingKey="",arrivalKey="",uiStatus="Waiting for map";boolean collapsed;
         long categoryUntil=-1;
         boolean opened,confirmed,previousFresh;
         long previousSession=-1;
@@ -144,7 +144,7 @@ final class NatMinimalEv {
     private static void remove(View v){if(v!=null&&v.getParent() instanceof ViewGroup)((ViewGroup)v.getParent()).removeView(v);}
     private static void removePanel(State s){remove(s.sheet());s.panel=null;s.rendered="";}
     static void clear(Activity a){
-        State s=STATES.get(a);if(s==null)return;remove(s.host());removePanel(s);removeMini(s,true);removeMini(s,false);s.toolbar=null;s.left=s.top=-1;s.mode=0;
+        State s=STATES.get(a);if(s==null)return;remove(s.host());removePanel(s);removeMini(s,true);removeMini(s,false);remove(s.arrival==null?null:s.arrival.get());s.arrival=null;s.arrivalKey="";s.toolbar=null;s.left=s.top=-1;s.mode=0;
     }
     private static android.widget.LinearLayout column(Context a){android.widget.LinearLayout l=new android.widget.LinearLayout(a);l.setTag(OWN);l.setOrientation(android.widget.LinearLayout.VERTICAL);return l;}
     private static int dp(Context a,int v){return Math.round(v*a.getResources().getDisplayMetrics().density);}
@@ -221,7 +221,7 @@ final class NatMinimalEv {
         for(int edge=0;edge<2&&slot==null;edge++)for(float fy:new float[]{.25f,.40f,.12f}){
             int x=edge==0?bounds.left+dp(a,12):bounds.right-dp(a,12)-w;
             int y=bounds.top+(int)(bounds.height()*fy);Rect q=new Rect(x,y,x+w,y+h);
-            if(bounds.contains(q)&&!Rect.intersects(toolbarSlot,q)&&(global(s.current==null?null:s.current.get())==null||!Rect.intersects(global(s.current.get()),q))&&free(views,q,host)){slot=q;break;}
+            if(bounds.contains(q)&&!Rect.intersects(toolbarSlot,q)&&!hits(q,s.current)&&!hits(q,s.arrival)&&free(views,q,host)){slot=q;break;}
         }
         if(slot==null){panelUnavailable(a,s,f);return;}
         NatLiveEnergy.Reading live=NatPrediction.liveReading();
@@ -335,7 +335,7 @@ final class NatMinimalEv {
         }else for(float y:new float[]{.82f,.72f,.64f})for(int side=0;side<3&&slot==null;side++){
             int x=side==0?(current?bounds.right-edge-w:bounds.centerX()-w/2):side==1?bounds.left+edge:bounds.right-edge-w;
             int top=bounds.top+(int)(bounds.height()*y);Rect q=new Rect(x,top,x+w,top+h);
-            if(bounds.contains(q)&&!Rect.intersects(toolbar,q)&&(panel==null||!Rect.intersects(panel,q))&&(other==null||!Rect.intersects(other,q))&&free(views,q,host))slot=q;
+            if(bounds.contains(q)&&!Rect.intersects(toolbar,q)&&(panel==null||!Rect.intersects(panel,q))&&(other==null||!Rect.intersects(other,q))&&!hits(q,s.arrival)&&free(views,q,host))slot=q;
         }
         if(slot==null){removeMini(s,current);return;}
         String key=dark+"|"+value+"|"+slot.toShortString(),old=current?s.currentKey:s.remainingKey;
@@ -347,6 +347,47 @@ final class NatMinimalEv {
         TextView metric=line(a,value,25,dark?Color.WHITE:0xff263238);metric.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);metric.setGravity(Gravity.CENTER);
         box.addView(label);box.addView(metric);put(host,box,slot,true);
         if(current){s.current=new WeakReference<>(box);s.currentKey=key;}else{s.remaining=new WeakReference<>(box);s.remainingKey=key;}
+    }
+    private static boolean hits(Rect q,WeakReference<android.widget.LinearLayout> ref){Rect x=global(ref==null?null:ref.get());return x!=null&&Rect.intersects(q,x);}
+    private static Rect rect(NatToolbarLayout.Slot q){return q==null?null:new Rect(q.x,q.y,q.x+q.w,q.y+q.h);}
+    private static boolean overlaps(Rect a,Rect b){return a!=null&&b!=null&&Rect.intersects(a,b);}
+    static String uiStatus(Activity a){State s=STATES.get(a);return s==null?"No UI session":s.uiStatus;}
+    private static void battery(Activity a,FrameLayout host,State s,Rect slot,boolean dark,boolean current,String title,String value){
+        WeakReference<android.widget.LinearLayout> ref=current?s.current:s.arrival;
+        View old=ref==null?null:ref.get();
+        String key=slot==null?"":dark+"|"+title+"|"+value+"|"+slot.toShortString();
+        if(slot!=null&&key.equals(current?s.currentKey:s.arrivalKey)&&old!=null&&old.getParent()==host&&old.getVisibility()==View.VISIBLE)return;
+        remove(old);
+        if(current){s.current=null;s.currentKey="";}else{s.arrival=null;s.arrivalKey="";}
+        if(slot==null)return;
+        android.widget.LinearLayout box=column(a);box.setGravity(Gravity.CENTER);box.setBackground(background(dark?0xff20303a:Color.WHITE,dp(a,10)));box.setElevation(dp(a,4));
+        box.setClickable(false);box.setFocusable(false);
+        TextView caption=line(a,title,12,dark?0xffbacbd3:0xff546a74);caption.setGravity(Gravity.CENTER);caption.setSingleLine(true);
+        TextView metric=line(a,value,36,value.startsWith("-")?(dark?0xffff8585:0xffb91c1c):dark?0xff74dba8:0xff137548);
+        metric.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);metric.setGravity(Gravity.CENTER);metric.setSingleLine(true);
+        box.addView(caption);box.addView(metric);put(host,box,slot,true);
+        if(current){s.current=new WeakReference<>(box);s.currentKey=key;}else{s.arrival=new WeakReference<>(box);s.arrivalKey=key;}
+    }
+    private static void menuAction(Activity a,State s,int which,int tries){
+        if(a.isFinishing()||a.isDestroyed()||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY)||STATES.get(a)!=s)return;
+        View root=a.getWindow().peekDecorView();if(root==null)return;
+        if(!a.hasWindowFocus()){if(tries>0)root.postDelayed(()->menuAction(a,s,which,tries-1),150);else toast(a,"NAT: เปิดเมนูอีกครั้ง");return;}
+        if(!controls(root).mapControls){toast(a,"NAT: กลับหน้าจอแผนที่ก่อน");return;}
+        if(which==0||which==3)act(a,s,which==3);
+        else if(which==1||which==2)switchPanel(a,s,which);
+        else if(which==4)NatSystemDiagnostics.show(a);
+        else if(which==5){s.collapsed=false;refresh(a,root);}
+    }
+    private static TextView launcher(Activity a,State s){
+        return toolbarButton(a,"☷","NAT controls — all five actions",()->{
+            if(!a.hasWindowFocus())return;
+            final int[] selection={-1};
+            android.app.AlertDialog d=new android.app.AlertDialog.Builder(a).setTitle("NAT Controls • จอดรถก่อนใช้งาน")
+                .setItems(new String[]{"EV Charging","Energy Prediction","Charging Plan","Clean Mode","System Diagnostics","Expand toolbar"},(dialog,which)->selection[0]=which)
+                .setNegativeButton("Close",null).create();
+            d.setOnDismissListener(dialog->{View root=a.getWindow().peekDecorView();if(selection[0]>=0&&root!=null)root.postDelayed(()->menuAction(a,s,selection[0],6),150);});
+            d.show();
+        });
     }
     static void refresh(Activity a,View root){
         if(root==null||!enabled(a)||!root.hasWindowFocus()||!SafeMode.on(a,SafeMode.BYD_BATTERY)){clear(a);return;}
@@ -364,30 +405,35 @@ final class NatMinimalEv {
         if(fresh&&state.previousSession>=0&&state.previousSession!=forecast.session)resetSearch(state);
         state.previousFresh=fresh;state.previousStops=stops;if(fresh)state.previousSession=forecast.session;
         updateSearch(state,c);
-        boolean routeControls=route||ownedSearch(state)||android.os.SystemClock.elapsedRealtime()<=state.categoryUntil;
-        if(!c.mapControls){clear(a);return;}
-        Rect bounds=new Rect();if(!host.getGlobalVisibleRect(bounds)){clear(a);return;}
+        if(!c.mapControls){state.uiStatus="Map controls not recognized; views released";clear(a);return;}
+        Rect bounds=new Rect();if(!host.getGlobalVisibleRect(bounds)){state.uiStatus="Map viewport unavailable";clear(a);return;}
         int size=dp(a,48),gap=dp(a,7),edge=dp(a,12);
-        NatToolbarLayout.Slot reserved=route&&!nativeCurrent(views)?NatToolbarLayout.currentBattery(bounds.left,bounds.top,bounds.right,bounds.bottom,dp(a,142),dp(a,58),edge,
-                q->free(views,new Rect(q.x,q.y,q.x+q.w,q.y+q.h),host)):null;
-        final Rect batterySlot=reserved==null?null:new Rect(reserved.x,reserved.y,reserved.x+reserved.w,reserved.y+reserved.h);
-        NatToolbarLayout.Slot chosen=NatToolbarLayout.choosePreferred(c.mapControls,routeControls,
-                bounds.left,bounds.top,bounds.right,bounds.bottom,size,gap,edge,true,
-                q->{Rect r=new Rect(q.x,q.y,q.x+q.w,q.y+q.h);return (batterySlot==null||!Rect.intersects(batterySlot,r))&&free(views,r,host);});
-        if(chosen==null){clear(a);report(state,"Toolbar unavailable: native controls protected");return;}
-        Rect slot=new Rect(chosen.x,chosen.y,chosen.x+chosen.w,chosen.y+chosen.h);
-        boolean vertical=chosen.vertical;
-        if(!routeControls){state.mode=0;removePanel(state);removeMini(state,true);removeMini(state,false);}
-        boolean active=unique(c.hide)!=null||(ownedSearch(state)&&c.evEvidence);boolean dark=ColorScheme.nightColors(a);
+        boolean dark=ColorScheme.nightColors(a);
+        NatLiveEnergy.Reading live=NatPrediction.liveReading();
+        NatPrediction.Snapshot matched=NatNavigationCard.matchesForecast(root,forecast)?forecast:null;
+        Integer nativeSoc=NatNavigationCard.verifiedSoc(root);
+        Integer arrival=matched!=null?Integer.valueOf(matched.google):nativeSoc;
+        String arrivalLabel=matched!=null?"แบตปลายทาง":nativeSoc!=null?"แบตเมื่อถึง (Maps)":"แบตปลายทาง";
+        Integer current=Double.isFinite(live.soc)&&live.soc>=0&&live.soc<=100?(int)Math.round(live.soc):null;
+        // Independent full-size cards: neither the toolbar nor the native summary owns their lifecycle.
+        Rect currentSlot=rect(NatPersistentLayout.battery(bounds.left,bounds.top,bounds.right,bounds.bottom,dp(a,164),dp(a,78),edge,true,q->free(views,rect(q),host)));
+        Rect arrivalSlot=rect(NatPersistentLayout.battery(bounds.left,bounds.top,bounds.right,bounds.bottom,dp(a,198),dp(a,94),edge,false,q->!overlaps(currentSlot,rect(q))&&free(views,rect(q),host)));
+        battery(a,host,state,currentSlot,dark,true,"แบตเตอรี่ปัจจุบัน",NatPersistentLayout.soc(current));
+        battery(a,host,state,arrivalSlot,dark,false,arrivalLabel,NatPersistentLayout.soc(arrival));
+        NatToolbarLayout.Slot chosen=NatPersistentLayout.toolbar(bounds.left,bounds.top,bounds.right,bounds.bottom,size,gap,edge,state.collapsed,
+                q->{Rect r=rect(q);return !overlaps(currentSlot,r)&&!overlaps(arrivalSlot,r)&&free(views,r,host);});
+        state.uiStatus="Current: "+(currentSlot==null?"no safe slot":current==null?"visible / no fresh SOC":"visible")+" | Arrival: "+(arrivalSlot==null?"no safe slot":arrival==null?"visible / no verified SOC":"visible")+" | Toolbar: "+(chosen==null?"no safe slot":chosen.count==1?"launcher":"5 buttons")+" | Route summary: "+(route?"verified":"not verified");
+        if(chosen==null){remove(state.host());state.toolbar=null;state.left=state.top=-1;removeMini(state,false);if(state.explicitPanelRequest&&state.mode!=0)panelUnavailable(a,state,matched);else{state.mode=0;removePanel(state);}return;}
+        Rect slot=rect(chosen);boolean vertical=chosen.vertical;
+        boolean active=unique(c.hide)!=null||(ownedSearch(state)&&c.evEvidence);
         android.widget.LinearLayout bar=state.toolbar==null?null:state.toolbar.get();
         if(bar==null||bar.getParent()!=host||state.vertical!=vertical||bar.getChildCount()!=chosen.count){
             remove(bar);bar=column(a);bar.setOrientation(vertical?1:0);bar.setElevation(dp(a,5));
             TextView[] keys;
-            if(chosen.count==1)keys=new TextView[]{diagnosticsButton(a,owner)};
+            if(chosen.count==1)keys=new TextView[]{launcher(a,owner)};
             else {
-                TextView[] original={toolbarButton(a,"⚡","EV Charging",()->act(a,owner,false)),toolbarButton(a,"↗","Energy Prediction",()->switchPanel(a,owner,1)),toolbarButton(a,"☷","Charging Plan",()->switchPanel(a,owner,2)),toolbarButton(a,"⊘","Clean Mode",()->{act(a,owner,true);refresh(a,a.getWindow().peekDecorView());})};
-                keys=java.util.Arrays.copyOf(original,chosen.count);
-                if(NatToolbarLayout.hasDiagnostics(chosen.count))keys[NatToolbarLayout.diagnosticIndex(chosen.count)]=diagnosticsButton(a,owner);
+                keys=new TextView[]{toolbarButton(a,"⚡","EV Charging",()->act(a,owner,false)),toolbarButton(a,"↗","Energy Prediction",()->switchPanel(a,owner,1)),toolbarButton(a,"☷","Charging Plan",()->switchPanel(a,owner,2)),toolbarButton(a,"⊘","Clean Mode — hold to collapse",()->{act(a,owner,true);refresh(a,a.getWindow().peekDecorView());}),diagnosticsButton(a,owner)};
+                keys[3].setOnLongClickListener(v->{owner.collapsed=true;owner.mode=0;removePanel(owner);refresh(a,a.getWindow().peekDecorView());return true;});
             }
             for(int i=0;i<keys.length;i++){android.widget.LinearLayout.LayoutParams lp=new android.widget.LinearLayout.LayoutParams(size,size);if(i>0){if(vertical)lp.topMargin=gap;else lp.leftMargin=gap;}bar.addView(keys[i],lp);}
             put(host,bar,slot,true);state.toolbar=new WeakReference<>(bar);state.vertical=vertical;
@@ -395,13 +441,8 @@ final class NatMinimalEv {
         state.left=slot.left;state.top=slot.top;
         boolean[] activeKeys=chosen.count==1?new boolean[]{false}:new boolean[]{active,state.mode==1,state.mode==2,false,false};
         for(int i=0;i<chosen.count;i++){TextView t=(TextView)bar.getChildAt(i);if(t.getCurrentTextColor()!=(activeKeys[i]||dark?Color.WHITE:0xff263238)||t.isSelected()!=activeKeys[i]||t.getBackground()==null){style(t,activeKeys[i],dark,size/2);t.setSelected(activeKeys[i]);}}
-        if(!routeControls)return;
-        NatPrediction.Snapshot matched=NatNavigationCard.matchesForecast(root,forecast)?forecast:null;
-        NatLiveEnergy.Reading live=NatPrediction.liveReading();
-        if(route){mini(a,host,state,views,bounds,slot,dark,true,Double.isFinite(live.soc)?Math.round(live.soc)+"%":"—");}
-        else removeMini(state,true);
         showPanel(a,host,state,views,bounds,slot,dark,matched);
-        if(route){mini(a,host,state,views,bounds,slot,dark,false,matched==null?"—":number(matched.remainingKwh,"kWh"));}
-        else{removeMini(state,true);removeMini(state,false);}
+        if(route)mini(a,host,state,views,bounds,slot,dark,false,matched==null?"—":number(matched.remainingKwh,"kWh"));
+        else removeMini(state,false);
     }
 }

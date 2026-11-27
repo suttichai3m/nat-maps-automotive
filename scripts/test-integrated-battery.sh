@@ -292,3 +292,46 @@ public class TestNatToolbar {
 JAVA
 javac --release 17 -encoding UTF-8 -d "$D" "$P/NatToolbarLayout.java" "$D/TestNatToolbar.java"
 java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatToolbar
+
+cat > "$D/TestNatPersistent.java" <<'JAVA'
+package app.morphe.extension.mapsautomotive.patches;
+class TestNatPersistent {
+ static int n;static void check(boolean b){if(!b)throw new AssertionError("Persistent case "+(n+1));n++;}
+ public static void main(String[] args){
+  check(Integer.valueOf(88).equals(NatNavigationSummary.parse("600 ม. · 19:17 น. · 88%")));
+  check(Integer.valueOf(88).equals(NatNavigationSummary.parse("600 ม. · 19:17 น. · 88% 🔋")));
+  check(Integer.valueOf(-8).equals(NatNavigationSummary.parse("500 ม. · 19:17 น. · -8%")));
+  check(Integer.valueOf(88).equals(NatNavigationSummary.parsePanelParts(java.util.Arrays.asList("8 นาที","600 ม. · 19:17 น.","88%"))));
+  check(NatNavigationSummary.parse("600 ม. · 19:17 น. · 88% · 89%")==null);
+  check(NatNavigationSummary.parse("600 ม. · 88%")==null);
+  check(NatNavigationSummary.parse("88%")==null);
+  check(Math.abs(NatNavigationSummary.routeKm("600 ม. · 19:17 น. · 88%")-.6)<1e-9);
+  check(Math.abs(NatNavigationSummary.routeKm("500 เมตร")-.5)<1e-9);
+  check(Math.abs(NatNavigationSummary.routeKm("600 m")-.6)<1e-9);
+  check(Math.abs(NatNavigationSummary.routeKm("19 กม.")-19)<1e-9);
+  check(Math.abs(NatNavigationSummary.routeKm("1.2 km")-1.2)<1e-9);
+  check(Math.abs(NatNavigationSummary.routeKm("1 mi")-1.609344)<1e-9);
+  check(Double.isNaN(NatNavigationSummary.routeKm("8 min")));
+  check(Double.isNaN(NatNavigationSummary.routeKm("600 ม. · 1 กม.")));
+  check("—".equals(NatPersistentLayout.soc(null)));
+  check("-8%".equals(NatPersistentLayout.soc(-8)));
+  var c=NatPersistentLayout.battery(0,0,900,490,164,78,12,true,q->true);
+  check(c.x==12&&c.y==12&&c.w==164&&c.h==78);
+  var a=NatPersistentLayout.battery(0,0,900,490,198,94,12,false,q->!NatPersistentLayout.intersects(c,q));
+  check(a.x==690&&a.w==198&&a.h==94&&!NatPersistentLayout.intersects(c,a));
+  check(NatPersistentLayout.battery(0,0,100,90,164,78,12,true,q->true)==null);
+  check(NatPersistentLayout.battery(0,0,900,490,164,78,12,true,q->false)==null);
+  check(NatPersistentLayout.battery(0,0,900,490,164,78,12,true,q->q.x>500).x>500);
+  var bar=NatPersistentLayout.toolbar(0,0,900,490,48,7,12,false,q->!NatPersistentLayout.intersects(c,q)&&!NatPersistentLayout.intersects(a,q));
+  check(bar.count==5&&!NatPersistentLayout.intersects(c,bar)&&!NatPersistentLayout.intersects(a,bar));
+  check(NatPersistentLayout.toolbar(0,0,900,490,48,7,12,true,q->true).count==1);
+  check(NatPersistentLayout.toolbar(0,0,900,490,48,7,12,false,q->q.count==1).count==1);
+  check(NatPersistentLayout.toolbar(0,0,900,490,48,7,12,false,q->false)==null);
+  check(!NatPersistentLayout.intersects(c,null));
+  check(NatPersistentLayout.intersects(c,c));
+  System.out.println("PASS: "+n+" NAT V2.0.5 persistent UI cases");
+ }
+}
+JAVA
+javac --release 17 -encoding UTF-8 -d "$D" "$P/NatSignedSoc.java" "$P/NatNavigationSummary.java" "$P/NatToolbarLayout.java" "$P/NatPersistentLayout.java" "$D/TestNatPersistent.java"
+java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatPersistent

@@ -69,7 +69,7 @@ final class NatSystemDiagnostics {
         JSONObject json() throws Exception{return new JSONObject().put("wall_ms",wall).put("elapsed_ms",at).put("cpu_pct_all_cores",number(cpu)).put("pss_mib",number(pss)).put("pss_age_ms",number(NatDiagnosticMath.age(at,pssAt)<0?Double.NaN:NatDiagnosticMath.age(at,pssAt))).put("system_total_mib",number(total)).put("system_available_mib",number(available)).put("system_low_memory",Double.isFinite(total)?low:JSONObject.NULL).put("data_available_mib",number(storage)).put("network",network);}
     }
     private static final class Session {
-        final Activity host;final Context app;final ArrayList<Sample> history=new ArrayList<>();
+        final Activity host;final Context app;final String uiAtOpen;final ArrayList<Sample> history=new ArrayList<>();
         final ArrayList<Sat> sats=new ArrayList<>();
         AlertDialog dialog;TextView resources,gps,byd,notes,historyText,cpuMetric,pssMetric,ramMetric,gpsMetric,satMetric,accuracyMetric,monitorStatus;Plot sky,graph;Button pause;ProgressBar memoryBar;
         boolean dark;int fg,muted,surface,cardColor,accent;
@@ -96,7 +96,7 @@ final class NatSystemDiagnostics {
             if(dialog.getWindow()==null||!dialog.getWindow().getDecorView().hasWindowFocus()){stop();return;}
             sample();renderGps();MAIN.postDelayed(this,INTERVAL);
         }};
-        Session(Activity a){host=a;app=a.getApplicationContext();}
+        Session(Activity a){host=a;app=a.getApplicationContext();uiAtOpen=NatMinimalEv.uiStatus(a);}
         TextView text(LinearLayout box,String s,int sp){TextView t=new TextView(host);t.setText(s);t.setTextSize(sp);t.setTextColor(fg);t.setPadding(0,dp(4),0,dp(4));box.addView(t);return t;}
         int dp(int v){return Math.round(v*host.getResources().getDisplayMetrics().density);}
         Button button(LinearLayout box,String name,Runnable action){Button b=new Button(host);b.setText(name);b.setTextColor(fg);b.setAllCaps(false);b.setMinHeight(dp(48));box.addView(b);b.setOnClickListener(v->{try{action.run();}catch(RuntimeException e){stop();ReportLog.w("NatDiagnostics","Control unavailable",e);}});return b;}
@@ -121,7 +121,7 @@ final class NatSystemDiagnostics {
             surface=dark?0xff14232b:0xffedf2ef;cardColor=dark?0xff20303a:0xffffffff;accent=dark?0xff74dba8:0xff137548;
             LinearLayout body=new LinearLayout(host);body.setOrientation(1);body.setPadding(dp(16),dp(12),dp(16),dp(12));body.setBackgroundColor(surface);
             LinearLayout header=card(body);heading(header,"NAT SYSTEM DIAGNOSTICS");monitorStatus=text(header,"Waiting for sample",14);monitorStatus.setTextColor(accent);
-            text(header,"V2.0.4 • Maps process including NAT • Use while parked",12).setTextColor(muted);
+            text(header,"V2.0.5 • Maps process including NAT • Use while parked",12).setTextColor(muted);
             LinearLayout resourcesCard=card(body);heading(resourcesCard,"01  Performance");
             LinearLayout metrics=row(resourcesCard);cpuMetric=metric(metrics,"APP CPU");pssMetric=metric(metrics,"APP RAM / PSS");
             ramMetric=metric(row(resourcesCard),"SYSTEM RAM USED");
@@ -135,13 +135,14 @@ final class NatSystemDiagnostics {
             gps=text(gpsCard,"Waiting for GPS",13);gps.setTextColor(muted);sky=new Plot(host,true,this);gpsCard.addView(sky,new LinearLayout.LayoutParams(-1,dp(230)));
             text(gpsCard,"Green = used in fix • Gray = not used • C/N₀ dB-Hz",12).setTextColor(muted);
             LinearLayout carCard=card(body);heading(carCard,"04  BYD SDK / Maps forecast");byd=text(carCard,"Waiting for sample",15);
-            LinearLayout actions=card(body);heading(actions,"05  Diagnostic report");
+            LinearLayout ui=card(body);heading(ui,"05  UI recovery • last map scan");text(ui,uiAtOpen.replace(" | ","\n"),14);
+            LinearLayout actions=card(body);heading(actions,"06  Diagnostic report");
             notes=text(actions,"Use while parked • read-only • no coordinates saved • no upload • paused when closed",12);
             pause=button(actions,"Pause",()->{if(running)stop();else start();});
             button(actions,"Copy Diagnostic JSON",()->{try{android.content.ClipboardManager c=host.getSystemService(android.content.ClipboardManager.class);if(c==null)throw new IllegalStateException();c.setPrimaryClip(android.content.ClipData.newPlainText("NAT diagnostic",report().toString(2)));Toast.makeText(host,"Copied",Toast.LENGTH_SHORT).show();}catch(Exception e){Toast.makeText(host,"Copy failed",Toast.LENGTH_SHORT).show();}});
             button(actions,"Export Diagnostic TXT + JSON",this::export);
             ScrollView scroll=new ScrollView(host);scroll.setFillViewport(true);scroll.addView(body);
-            dialog=new AlertDialog.Builder(host,dark?android.R.style.Theme_DeviceDefault_Dialog_Alert:android.R.style.Theme_DeviceDefault_Light_Dialog_Alert).setTitle("NAT V2.0.4 • System Diagnostics").setView(scroll).setPositiveButton("Close",null).create();
+            dialog=new AlertDialog.Builder(host,dark?android.R.style.Theme_DeviceDefault_Dialog_Alert:android.R.style.Theme_DeviceDefault_Light_Dialog_Alert).setTitle("NAT V2.0.5 • System Diagnostics").setView(scroll).setPositiveButton("Close",null).create();
             dialog.setOnDismissListener(d->{closed=true;stop();if(current.get()==this)current.clear();});
             dialog.show();if(dialog.getWindow()!=null){int width=host.getWindow().getDecorView().getWidth();if(width>0)dialog.getWindow().setLayout(Math.min(width,dp(760)),android.view.ViewGroup.LayoutParams.WRAP_CONTENT);}
             start();
@@ -205,10 +206,10 @@ final class NatSystemDiagnostics {
             long now=SystemClock.elapsedRealtime();JSONArray hist=new JSONArray(),sat=new JSONArray();for(Sample s:history)hist.put(s.json());
             boolean f=running&&permission&&Boolean.TRUE.equals(enabled)&&NatDiagnosticMath.fresh(now,gnssAt,GNSS_AGE);
             if(f)for(Sat s:sats)sat.put(s.json());
-            return new JSONObject().put("schema","nat-diagnostics-2.0.3").put("app_version","2.0.4").put("captured_wall_ms",System.currentTimeMillis()).put("monitoring",running).put("process_scope","Maps process including NAT; no other processes").put("cpu_normalization","all logical cores").put("history",hist).put("byd",bydSnapshot==null?JSONObject.NULL:bydSnapshot).put("gps",new JSONObject().put("status",running?gpsStatus:"PAUSED").put("last_observed_status",gpsStatus).put("permission",permission).put("provider_enabled",enabled==null?JSONObject.NULL:enabled).put("request_active",requested).put("callback_registered",registered).put("fix_age_ms",number(fixAt<0?Double.NaN:NatDiagnosticMath.age(now,fixAt))).put("fix_cached",fixCached).put("accuracy_m",number(accuracy)).put("gnss_age_ms",number(gnssAt<0?Double.NaN:NatDiagnosticMath.age(now,gnssAt))).put("seen",count(f?satCount:-1)).put("used",count(f?usedCount:-1)).put("satellites",sat));
+            return new JSONObject().put("schema","nat-diagnostics-2.0.3").put("app_version","2.0.5").put("captured_wall_ms",System.currentTimeMillis()).put("monitoring",running).put("process_scope","Maps process including NAT; no other processes").put("cpu_normalization","all logical cores").put("history",hist).put("ui_at_open",uiAtOpen).put("byd",bydSnapshot==null?JSONObject.NULL:bydSnapshot).put("gps",new JSONObject().put("status",running?gpsStatus:"PAUSED").put("last_observed_status",gpsStatus).put("permission",permission).put("provider_enabled",enabled==null?JSONObject.NULL:enabled).put("request_active",requested).put("callback_registered",registered).put("fix_age_ms",number(fixAt<0?Double.NaN:NatDiagnosticMath.age(now,fixAt))).put("fix_cached",fixCached).put("accuracy_m",number(accuracy)).put("gnss_age_ms",number(gnssAt<0?Double.NaN:NatDiagnosticMath.age(now,gnssAt))).put("seen",count(f?satCount:-1)).put("used",count(f?usedCount:-1)).put("satellites",sat));
         }
         void export(){
-            final String json,txt;try{json=report().toString(2);txt="NAT V2.0.4 System Diagnostics\n"+resources.getText()+"\n"+gps.getText()+"\n"+byd.getText()+"\n"+notes.getText()+"\n\n"+json;}catch(Exception e){Toast.makeText(host,"Export unavailable",Toast.LENGTH_SHORT).show();return;}
+            final String json,txt;try{json=report().toString(2);txt="NAT V2.0.5 System Diagnostics\n"+resources.getText()+"\n"+gps.getText()+"\n"+byd.getText()+"\n"+notes.getText()+"\n\n"+json;}catch(Exception e){Toast.makeText(host,"Export unavailable",Toast.LENGTH_SHORT).show();return;}
             IO.execute(()->{String result;try{
                 File dir=app.getExternalFilesDir("nat_diagnostics");if(dir==null)dir=new File(app.getFilesDir(),"nat_diagnostics");if(!dir.isDirectory()&&!dir.mkdirs())throw new java.io.IOException();
                 String base="NAT-diagnostic-"+System.currentTimeMillis();write(new File(dir,base+".json"),json);write(new File(dir,base+".txt"),txt);result="Exported TXT + JSON: "+dir.getAbsolutePath()+"/"+base;
