@@ -251,7 +251,8 @@ final class NatSplitScreen {
   s.arrival.setTextColor(arrival!=null&&arrival<20?(s.dark?0xffff9b9b:0xffb91c1c):blue(s));
   set(s.speed,fmt(speed,"km/h"));
   set(s.heading,!Double.isFinite(speed)?"ข้อมูลความเร็ว —":speed<=1?"จอดนิ่ง":!Double.isFinite(turn)?"ทิศทาง —":turn<-3?"แนวโน้มเลี้ยวซ้าย":turn>3?"แนวโน้มเลี้ยวขวา":"แนวโน้มขับตรง");
-  set(s.power,"—"); // No validated dashboard power signal.set(s.remaining,fmt(match?f.remainingKwh:Double.NaN,"kWh"));set(s.rate,fmt(match?live.rate:Double.NaN,"kWh/100km"));
+  set(s.power,"—"); // No validated dashboard power signal.
+  set(s.remaining,fmt(match?f.remainingKwh:Double.NaN,"kWh"));set(s.rate,fmt(match?live.rate:Double.NaN,"kWh/100km"));
   set(s.distance,fmt(NatNavigationCard.verifiedKm(root),"km"));
   String eta=NatNavigationCard.verifiedEta(root);set(s.eta,eta==null?"—":eta);
   String gps;
