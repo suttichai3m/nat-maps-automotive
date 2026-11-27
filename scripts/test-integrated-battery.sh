@@ -85,3 +85,29 @@ class TestIntegrated {
 JAVA
 javac --release 17 -encoding UTF-8 -d "$D" "$P/NatSignedSoc.java" "$P/NatNavigationSummary.java" "$P/NatBatteryPlacement.java" "$D/TestIntegrated.java"
 java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestIntegrated
+
+cat > "$D/TestNatTripMath.java" <<'JAVA'
+package app.morphe.extension.mapsautomotive.patches;
+public class TestNatTripMath {
+ static int n;
+ static void check(boolean b){if(!b)throw new AssertionError("Trip case "+n);n++;}
+ static boolean near(double a,double b){return Math.abs(a-b)<1e-6;}
+ public static void main(String[] args){
+  check(NatTripMath.linked(1,300001));check(!NatTripMath.linked(1,300002));check(!NatTripMath.linked(2,1));
+  check(NatTripMath.contiguous(1,30001));check(!NatTripMath.contiguous(1,30002));
+  check(near(NatTripMath.charge(82.56,20,80),49.536));
+  try{NatTripMath.charge(82.56,80,20);throw new AssertionError();}catch(IllegalArgumentException ok){n++;}
+  try{NatTripMath.charge(Double.NaN,20,80);throw new AssertionError();}catch(IllegalArgumentException ok){n++;}
+  check(near(NatTripMath.averageKw(50000,49900,10000),36));
+  check(near(NatTripMath.averageKw(49900,50000,10000),-36));
+  check(Double.isNaN(NatTripMath.averageKw(50000,0,10000)));
+  check(Double.isNaN(NatTripMath.averageKw(50000,49900,40000)));
+  NatTripMath.Energy e=new NatTripMath.Energy();e.add(50000,49900,10000,.2);e.add(49900,50000,10000,.2);
+  check(near(e.net(),0));check(near(e.down,.1));check(near(e.up,.1));check(near(e.km,.4));
+  e.add(-1,100,10000,1);e.add(50000,0,10000,1);e.add(50000,49900,40000,1);check(e.pairs==2);
+  System.out.println("PASS: "+n+" NAT trip math cases");
+ }
+}
+JAVA
+javac --release 17 -encoding UTF-8 -d "$D" "$P/NatTripMath.java" "$D/TestNatTripMath.java"
+java -cp "$D" app.morphe.extension.mapsautomotive.patches.TestNatTripMath

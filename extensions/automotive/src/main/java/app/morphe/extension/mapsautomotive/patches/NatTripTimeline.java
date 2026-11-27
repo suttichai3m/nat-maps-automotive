@@ -33,10 +33,12 @@ final class NatTripTimeline {
     private static LocationManager manager;
     private static boolean listening;
     private static final android.os.Handler WATCH=new android.os.Handler(Looper.getMainLooper());
-    private static long lastSample=-1;
+    private static volatile long lastSample=-1;
     private static final Runnable WATCHDOG=()->{synchronized(NatTripTimeline.class){if(listening && SystemClock.elapsedRealtime()-lastSample>35000){stop();status="Vehicle data stale — GPS paused";}}};
     private static long lastMoving=-1, lastFix=-1;
     private static volatile String status="Waiting for vehicle";
+    private static volatile String liveEnergy="Battery power estimate unavailable";
+    private static int previousWh=-1; private static long previousEnergyAt=-1;
     private static final LocationListener listener=new LocationListener(){
         public void onLocationChanged(Location l){}
         public void onStatusChanged(String p,int s,Bundle b){}
@@ -58,12 +60,15 @@ final class NatTripTimeline {
     }
     private static void stop(){
         if(listening && manager!=null) try{manager.removeUpdates(listener);}catch(RuntimeException ignored){}
-        listening=false; lastFix=-1; WATCH.removeCallbacks(WATCHDOG);
+        listening=false; lastFix=-1; previousWh=-1; previousEnergyAt=-1; liveEnergy="Battery power estimate unavailable"; WATCH.removeCallbacks(WATCHDOG);
     }
     /** Existing BYD worker, approximately every 10 seconds. Only moving samples are stored. */
     static synchronized void sample(Context c,BydDriveLog.Sample s){
         if(!enabled(c)){stop();lastMoving=-1;status="Off";return;}
         long now=SystemClock.elapsedRealtime(); lastSample=now;
+        double kw=NatTripMath.averageKw(previousWh,s.energyWh,now-previousEnergyAt);
+        liveEnergy=Double.isFinite(kw)?String.format(Locale.US,"Recent battery change rate: %.1f kW (estimated average, not motor power)",kw):"Battery power estimate unavailable";
+        previousWh=s.energyWh;previousEnergyAt=now;
         WATCH.removeCallbacks(WATCHDOG); WATCH.postDelayed(WATCHDOG,36000);
         if(!Double.isFinite(s.speedKmh)||s.speedKmh<=1||s.speedKmh>250){
             if(lastMoving<0||now-lastMoving>=GAP)stop();
@@ -109,7 +114,7 @@ final class NatTripTimeline {
     }
     private static boolean linked(Point a,Point b){return NatTripMath.linked(a.time,b.time);}
     private static double km(Point a,Point b){
-        if(!linked(a,b))return 0;
+        if(!NatTripMath.contiguous(a.time,b.time))return 0;
         double hours=(b.time-a.time)/3600000.0;
         if(a.odo>=0&&b.odo>=a.odo){double k=(b.odo-a.odo)/10.0;if(k<=hours*250+0.1)return k;}
         float[] r=new float[1];Location.distanceBetween(a.lat,a.lon,b.lat,b.lon,r);
@@ -130,7 +135,7 @@ final class NatTripTimeline {
             paint.setStrokeWidth(4);paint.setColor(0xff58d4b1);
             for(Point p:points){
                 float x=(float)(20+(p.lon-minX)*scale),y=(float)(getHeight()-20-(p.lat-minY)*scale);
-                if(previous!=null&&linked(previous,p))canvas.drawLine(prevX,prevY,x,y,paint);
+                if(previous!=null&&NatTripMath.contiguous(previous.time,p.time))canvas.drawLine(prevX,prevY,x,y,paint);
                 else canvas.drawCircle(x,y,5,paint);
                 previous=p;prevX=x;prevY=y;
             }
@@ -147,6 +152,7 @@ final class NatTripTimeline {
         Switch toggle=new Switch(c);toggle.setText("Enable private GPS recording / บันทึก GPS");toggle.setChecked(enabled(c));body.addView(toggle);
         TextView note=new TextView(c);note.setText("Local only • moving vehicle • GPS permission required • 90 days / 100,000 points maximum. Use while parked.");body.addView(note);
         TextView summary=new TextView(c);body.addView(summary);
+        TextView live=new TextView(c);body.addView(live);
         LinearLayout route=new LinearLayout(c);route.setOrientation(1);body.addView(route);
         LinearLayout rows=new LinearLayout(c);rows.setOrientation(1);body.addView(rows);
         final int[] offset={0};final int[] generation={0}; final int[] period={1};
@@ -167,7 +173,7 @@ final class NatTripTimeline {
                             if(first!=null)labels.add(fmt(first.time,"HH:mm")+" – "+fmt(prev.time,"HH:mm")+"   "+String.format(Locale.US,"%.1f km",tripKm));
                             trips++;first=p;tripKm=0;
                         }else{
-                            double k=km(prev,p);distance+=k;tripKm+=k;moving+=p.time-prev.time;
+                            double k=km(prev,p);distance+=k;tripKm+=k;if(NatTripMath.contiguous(prev.time,p.time))moving+=p.time-prev.time;
                             energy.add(prev.wh,p.wh,p.time-prev.time,k);
                         }
                         prev=p;
@@ -199,21 +205,22 @@ final class NatTripTimeline {
             try{
                 File dir=c.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS);
                 if(dir==null)throw new IOException("storage");
-                File f=new File(dir,"nat-timeline-"+fmt(start,"yyyyMMdd")+".csv");
+                ArrayList<Point> data=points(c,start,end);
+                String prefix="nat-timeline-"+fmt(start,"yyyyMMdd")+"-"+fmt(end-1,"yyyyMMdd");
+                File f=new File(dir,prefix+".csv");
                 try(PrintWriter w=new PrintWriter(new OutputStreamWriter(new FileOutputStream(f),java.nio.charset.StandardCharsets.UTF_8))){
                     w.println("wall_ms,latitude,longitude,battery_wh,odometer_0.1km,soc");
-                    for(Point p:points(c,start,end))w.println(p.time+","+p.lat+","+p.lon+","+(p.wh<0?"":p.wh)+","+(p.odo<0?"":p.odo)+","+(Double.isFinite(p.soc)?p.soc:""));
+                    for(Point p:data)w.println(p.time+","+p.lat+","+p.lon+","+(p.wh<0?"":p.wh)+","+(p.odo<0?"":p.odo)+","+(Double.isFinite(p.soc)?p.soc:""));
                     if(w.checkError())throw new IOException("write");
                 }
-                ArrayList<Point> data=points(c,start,end);
-                File gpx=new File(dir,"nat-timeline-"+fmt(start,"yyyyMMdd")+".gpx");
+                File gpx=new File(dir,prefix+".gpx");
                 try(PrintWriter w=new PrintWriter(new OutputStreamWriter(new FileOutputStream(gpx),java.nio.charset.StandardCharsets.UTF_8))){
                     w.println("<?xml version=\"1.0\" encoding=\"UTF-8\"?><gpx version=\"1.1\" creator=\"NAT Timeline\" xmlns=\"http://www.topografix.com/GPX/1/1\"><trk><name>NAT recorded route</name>");
                     SimpleDateFormat utc=new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'",Locale.US);utc.setTimeZone(TimeZone.getTimeZone("UTC"));
-                    Point prev=null;for(Point p:data){if(prev==null||!linked(prev,p)){if(prev!=null)w.println("</trkseg>");w.println("<trkseg>");}w.println("<trkpt lat=\""+p.lat+"\" lon=\""+p.lon+"\"><time>"+utc.format(new Date(p.time))+"</time></trkpt>");prev=p;}
+                    Point prev=null;for(Point p:data){if(prev==null||!NatTripMath.contiguous(prev.time,p.time)){if(prev!=null)w.println("</trkseg>");w.println("<trkseg>");}w.println("<trkpt lat=\""+p.lat+"\" lon=\""+p.lon+"\"><time>"+utc.format(new Date(p.time))+"</time></trkpt>");prev=p;}
                     if(prev!=null)w.println("</trkseg>");w.println("</trk></gpx>");if(w.checkError())throw new IOException("GPX write");
                 }
-                File json=new File(dir,"nat-timeline-"+fmt(start,"yyyyMMdd")+".json");
+                File json=new File(dir,prefix+".json");
                 try(PrintWriter w=new PrintWriter(new OutputStreamWriter(new FileOutputStream(json),java.nio.charset.StandardCharsets.UTF_8))){
                     w.print("[");boolean first=true;for(Point p:data){if(!first)w.print(",");first=false;w.print("{\"wall_ms\":"+p.time+",\"lat\":"+p.lat+",\"lon\":"+p.lon+",\"battery_wh\":"+(p.wh<0?"null":Integer.toString(p.wh))+",\"soc\":"+(Double.isFinite(p.soc)?Double.toString(p.soc):"null")+"}");}w.println("]");if(w.checkError())throw new IOException("JSON write");
                 }
@@ -226,6 +233,7 @@ final class NatTripTimeline {
             toggle.setChecked(false);toggle.setEnabled(false);IO.execute(()->{try{store(c).getWritableDatabase().delete("points",null,null);a.runOnUiThread(()->{toggle.setEnabled(true);refresh.run();});}catch(RuntimeException e){a.runOnUiThread(()->{toggle.setEnabled(true);summary.setText("Delete failed");});}});
         }).show());
         AlertDialog dialog=new AlertDialog.Builder(a).setTitle("NAT V2.0 • Trip Timeline").setView(scroll).setPositiveButton("Close",null).create();dialog.setOnDismissListener(d->generation[0]++);dialog.show();
+        Runnable update=new Runnable(){public void run(){if(!dialog.isShowing()||a.isDestroyed())return;live.setText(enabled(c)&&SystemClock.elapsedRealtime()-lastSample<=35000?liveEnergy:"Battery power estimate unavailable");WATCH.postDelayed(this,2000);}};update.run();
         refresh.run();
     }
 }

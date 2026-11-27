@@ -1,6 +1,8 @@
 package app.morphe.extension.mapsautomotive.patches;
 final class NatTripMath {
     static boolean linked(long a,long b){return b>a&&b-a<=300000;}
+    static boolean contiguous(long a,long b){return b>a&&b-a<=30000;}
+    static double averageKw(int a,int b,long ms){if(a<0||b<0||ms<5000||ms>30000)return Double.NaN;double kw=((long)a-b)*3600.0/ms;return Math.abs(kw)<=250?kw:Double.NaN;}
     static final class Energy {
         double down,up,km; int pairs;
         void add(int a,int b,long ms,double distance){
