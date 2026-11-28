@@ -1,4 +1,4 @@
-name: NAT V3.1 integrated candidate build
+name: NAT V4.0 integrated build
 on:
   workflow_dispatch:
   push:
@@ -46,6 +46,8 @@ jobs:
         run: bash scripts/test-nat-driver.sh
       - name: EV planner and telemetry validation tests
         run: bash scripts/test-nat-ev-plan.sh
+      - name: Live power and regeneration tests
+        run: bash scripts/test-nat-drive-power.sh
       - name: Build patch
         env:
           GITHUB_ACTOR: ${{ github.actor }}
@@ -55,6 +57,6 @@ jobs:
           bash gradlew --no-daemon buildAndroid
       - uses: actions/upload-artifact@v4
         with:
-          name: NAT-V3.1-integrated-candidate-mpp
+          name: NAT-V4.0-integrated-mpp
           path: patches/build/libs/*.mpp
           if-no-files-found: error

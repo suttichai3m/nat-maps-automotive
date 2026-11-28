@@ -83,7 +83,7 @@ final class NatSmartEvMenu {
   },100);
  }
  private void home(){
-  heading("Smart EV  •  NAT V4.0 Candidate");
+  heading("Smart EV  •  NAT V4.0");
   line("เลือกฟังก์ชัน • รายละเอียดควรเปิดดูเมื่อจอดรถ");
   action("Grab / Bolt / Private • Driver Mode",()->closeThen(()->NatDriverWork.show(a)));
   action("Favorite Apps Manager",()->closeThen(()->NatV36Shortcuts.favoriteApps(a)));
@@ -150,6 +150,7 @@ final class NatSmartEvMenu {
  }
  private void energy(){
   heading("Energy Intelligence");
+  line(NatDrivePower.summary());
   NatV33Telemetry.Today t=NatV33Telemetry.today();boolean detail=t!=null&&t.detailPairs>0;
   double price=NatV33Telemetry.tariff(a),net=t==null?Double.NaN:t.kwh;
   double covered=detail?t.observedKm:Double.NaN,observed=detail?Math.max(0,t.observedNet):Double.NaN;

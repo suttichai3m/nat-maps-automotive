@@ -126,7 +126,7 @@ private fun MutableMethod.filterString(index: Int, register: Int, extensionMetho
 private val bydEnergyProviderPatch = resourcePatch {
     dependsOn(manifestPatch)
     execute {
-        document("AndroidManifest.xml").use { addBydEnergyProvider(it, PATCHED_PACKAGE_NAME); addNatLauncherQueries(it) }
+        document("AndroidManifest.xml").use { addBydEnergyProvider(it, PATCHED_PACKAGE_NAME); addNatLauncherQueries(it); addNatEngineReadPermission(it) }
     }
 }
 
@@ -535,4 +535,15 @@ internal fun addNatLauncherQueries(document: Document) {
     intent.appendChild(document.createElement("action").apply { setAttribute("android:name", "android.intent.action.MAIN") })
     intent.appendChild(document.createElement("category").apply { setAttribute("android:name", "android.intent.category.LAUNCHER") })
     queries.appendChild(intent)
+}
+
+// Declare only the documented read permission. Android/BYD still enforce actual access.
+internal fun addNatEngineReadPermission(document: Document) {
+    val name = "android.permission.BYDAUTO_ENGINE_GET"
+    val permissions = document.getElementsByTagName("uses-permission")
+    for (index in 0 until permissions.length) if ((permissions.item(index) as Element).getAttribute("android:name") == name) return
+    val root = document.documentElement
+    val permission = document.createElement("uses-permission").apply { setAttribute("android:name", name) }
+    val application = document.getElementsByTagName("application").item(0)
+    root.insertBefore(permission, application)
 }

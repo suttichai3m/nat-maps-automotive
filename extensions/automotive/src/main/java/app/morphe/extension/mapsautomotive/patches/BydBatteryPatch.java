@@ -339,7 +339,8 @@ public final class BydBatteryPatch {
         String status=!active?"inactive":age<0?"waiting":age>FRESH_MS||energyModel==null?"stale / unavailable":"fresh";
         return new JSONObject().put("source",source==null?"unknown":source instanceof TsEnergyReader?"TS car adapter":"BYD SDK")
                 .put("status",status).put("sample_age_ms",age<0?JSONObject.NULL:age)
-                .put("forecast",NatPrediction.freshSnapshot()==null?"unavailable / stale":"fresh (route UI not checked)");
+                .put("forecast",NatPrediction.freshSnapshot()==null?"unavailable / stale":"fresh (route UI not checked)")
+                .put("drive_power",NatDrivePower.diagnostics());
     }
 
     /** The dashboard percentage of the model Maps can read now, NaN while there is none (before a reading, or withdrawn). */

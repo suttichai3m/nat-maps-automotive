@@ -8,7 +8,7 @@ on:
       version:
         description: APK label (e.g. 2.0.2)
         required: true
-        default: '4.0.1'
+        default: '4.0'
       mode:
         description: Build or generate default options for review
         type: choice
@@ -29,6 +29,29 @@ jobs:
     timeout-minutes: 45
     environment: nat-cloud-signing
     steps:
+      - name: Check private APK input configuration (no secrets printed)
+        env:
+          VAULT: ${{ vars.NAT_VAULT_REPO }}
+          GH_TOKEN: ${{ secrets.NAT_VAULT_TOKEN }}
+          ORIGINAL_SHA256: ${{ vars.NAT_ORIGINAL_SHA256 }}
+          EXPECTED_CERT: ${{ vars.NAT_SIGNER_SHA256 }}
+          KEYSTORE_B64: ${{ secrets.NAT_KEYSTORE_B64 }}
+          MODE: ${{ inputs.mode || 'build' }}
+        run: |
+          set -euo pipefail
+          missing=0
+          [[ "$VAULT" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo '::error::Set NAT_VAULT_REPO in nat-cloud-signing environment'; missing=1; }
+          [[ -n "$GH_TOKEN" ]] || { echo '::error::Set NAT_VAULT_TOKEN secret in nat-cloud-signing environment'; missing=1; }
+          if [[ "$MODE" == build ]]; then
+            [[ "$ORIGINAL_SHA256" =~ ^[[:xdigit:]]{64}$ ]] || { echo '::error::Set NAT_ORIGINAL_SHA256'; missing=1; }
+            [[ "$EXPECTED_CERT" =~ ^[[:xdigit:]]{64}$ ]] || { echo '::error::Set NAT_SIGNER_SHA256'; missing=1; }
+            [[ -n "$KEYSTORE_B64" ]] || { echo '::error::Set existing NAT_KEYSTORE_B64 signing secret'; missing=1; }
+          fi
+          if (( missing )); then
+            echo 'APK build blocked by missing private inputs. Separate MPP workflow continues.' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          [[ "$VAULT" != "$GITHUB_REPOSITORY" && "$(gh api "repos/$VAULT" --jq .private)" == true ]] || { echo '::error::Vault must be separate, private and accessible'; exit 1; }
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -44,7 +67,7 @@ jobs:
       - name: Test all NAT modules
         run: |
           set -euo pipefail
-          for s in signed-soc navigation-summary theme-schedule battery-placement integrated-battery nat-v33 nat-v34 nat-v35 nat-v36 nat-favorites nat-ev-layer nat-driver nat-ev-plan; do
+          for s in signed-soc navigation-summary theme-schedule battery-placement integrated-battery nat-v33 nat-v34 nat-v35 nat-v36 nat-favorites nat-ev-layer nat-driver nat-ev-plan nat-drive-power; do
             bash "scripts/test-$s.sh"
           done
       - name: Build MPP
@@ -64,6 +87,6 @@ jobs:
           STORE_PASSWORD: ${{ secrets.NAT_KEYSTORE_PASSWORD }}
           ENTRY_ALIAS: ${{ vars.NAT_KEY_ALIAS }}
           ENTRY_PASSWORD: ${{ secrets.NAT_KEY_PASSWORD }}
-          VERSION: ${{ inputs.version || '4.0.1' }}
+          VERSION: ${{ inputs.version || '4.0' }}
           MODE: ${{ inputs.mode || 'build' }}
         run: bash scripts/nat-cloud-apk.sh

@@ -207,7 +207,7 @@ final class NatSplitScreen {
  private static void build(Activity a,State s,int width,int mapH,int footerH){
   s.dark=ColorScheme.nightColors(a);
   LinearLayout panel=vertical(a);panel.setTag(OWN);panel.setBackgroundColor(surface(s));panel.setPadding(dp(a,6),dp(a,5),dp(a,6),dp(a,4));s.panel=panel;
-  add(panel,text(a,"BYD SEAL  •  NAT V4.0 Candidate",14,fg(s),true),dp(a,24));
+  add(panel,text(a,"BYD SEAL  •  NAT V4.0",14,fg(s),true),dp(a,24));
   s.hero=new ImageView(a);s.hero.setScaleType(ImageView.ScaleType.FIT_CENTER);
   s.hero.setContentDescription("BYD Seal blue, static studio image");s.hero.setImageBitmap(NatSealHero.bitmap());
   s.hero.setBackground(bg(a,0xff071522,0,8));s.hero.setClipToOutline(true);
@@ -227,7 +227,7 @@ final class NatSplitScreen {
   s.driverSummary=text(a,"",14,fg(s),true);s.driverSummary.setGravity(Gravity.START);s.driverSummary.setPadding(dp(a,6),dp(a,6),dp(a,6),dp(a,6));add(body,s.driverSummary,-2);s.driverSummary.setVisibility(View.GONE);
   int metricsH=dp(a,46);
   LinearLayout m0=row(a);m0.setTag("nat_custom_range");add(body,m0,metricsH);s.range=metric(a,s,m0,"ระยะที่ขับได้ (ประมาณ)",green(s),false,false);s.odo=metric(a,s,m0,"เลขไมล์สะสม ODO",fg(s),false,false);
-  LinearLayout m1=row(a);m1.setTag("nat_custom_power");add(body,m1,metricsH);s.speed=metric(a,s,m1,"ความเร็ว",fg(s),false,false);s.power=metric(a,s,m1,"POWER / REGEN (เฉลี่ย)",fg(s),false,false);
+  LinearLayout m1=row(a);m1.setTag("nat_custom_power");add(body,m1,metricsH);s.speed=metric(a,s,m1,"ความเร็ว",fg(s),false,false);s.power=metric(a,s,m1,"POWER / REGEN",fg(s),false,false);
   LinearLayout m2=row(a);m2.setTag("nat_custom_forecast");add(body,m2,metricsH);s.remaining=metric(a,s,m2,"พลังงานที่ต้องใช้อีก",fg(s),false,false);s.rate=metric(a,s,m2,"อัตราสิ้นเปลืองคาดการณ์",fg(s),false,false);
   LinearLayout m3=row(a);m3.setTag("nat_custom_route");add(body,m3,metricsH);s.distance=metric(a,s,m3,"ระยะทาง (Maps)",fg(s),false,false);s.eta=metric(a,s,m3,"ถึงเวลา (Maps)",fg(s),false,false);
   LinearLayout ac=row(a);ac.setTag("nat_custom_climate");add(body,ac,metricsH);s.acDriver=metric(a,s,ac,"แอร์คนขับ",blue(s),false,false);s.acPassenger=metric(a,s,ac,"แอร์ผู้โดยสาร",blue(s),false,false);
@@ -322,9 +322,20 @@ final class NatSplitScreen {
  static void refreshFast(Activity a){
   State s=states.get(a);if(s==null||!active(a)||!a.hasWindowFocus()||!BydBatteryPatch.isActive())return;
   NatV33Telemetry.request();NatV33Telemetry.Fast f=NatV33Telemetry.fast();
+  updatePower(s);
   if(f==null)return;
   Integer soc=NatSplitMath.current(f.soc);if(soc!=null)set(s.soc,NatSplitMath.percent(soc));
   if(Double.isFinite(f.speed))set(s.speed,fmt(f.speed,"km/h"));
+ }
+ private static void updatePower(State s){
+  if(s.power==null)return;
+  NatDrivePower.Reading direct=BydBatteryPatch.isActive()?NatDrivePower.fresh():null;
+  NatV33Telemetry.Slow slow=BydBatteryPatch.isActive()?NatV33Telemetry.slow():null;
+  double kw=direct!=null?direct.kw:slow==null?Double.NaN:slow.kw;
+  String label=direct!=null?NatDrivePowerRules.label(kw,direct.speed):Double.isFinite(kw)?"BMS AVG (ประมาณ)":"POWER / REGEN";
+  set(s.power,Double.isFinite(kw)?String.format(Locale.US,kw==0?"%.0f kW":"%+.1f kW",kw):"—");
+  if(s.power.getParent() instanceof LinearLayout){View v=((LinearLayout)s.power.getParent()).getChildAt(0);if(v instanceof TextView)set((TextView)v,label);}
+  s.power.setTextColor(direct!=null&&NatDrivePowerRules.regen(kw,direct.speed)?green(s):direct!=null&&kw>0?blue(s):fg(s));
  }
  private static void update(Activity a,State s,View root){
   long now=SystemClock.elapsedRealtime();Motion m=sample;
@@ -351,8 +362,7 @@ final class NatSplitScreen {
    s.heading.setBackground(bg(a,s.dark?0xff1a2c3b:0xfff8fbfc,s.dark?0xff344a5d:0xffcddbe4,10));
   }
   NatV33Telemetry.Slow tele=BydBatteryPatch.isActive()?NatV33Telemetry.slow():null;
-  double kw=tele==null?Double.NaN:tele.kw;
-  set(s.power,Double.isFinite(kw)?String.format(Locale.US,"%+.1f kW",kw):"—");s.power.setTextColor(Double.isFinite(kw)&&kw<0?green(s):fg(s));
+  updatePower(s);
   set(s.range,fmt(tele==null?Double.NaN:tele.range,"km"));
   set(s.odo,tele!=null&&Double.isFinite(tele.odo)?String.format(Locale.US,"%,.1f km",tele.odo):"—");
   NatVehicleExtras.Values extra=NatVehicleExtras.read();

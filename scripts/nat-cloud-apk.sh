@@ -2,7 +2,7 @@
 set -euo pipefail
 umask 077
 [[ "${GITHUB_REF:-}" == refs/heads/map-original ]] || { echo "Use map-original"; exit 1; }
-[[ "${VERSION:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9]+)*$ ]] || { echo "Invalid version"; exit 1; }
+[[ "${VERSION:-}" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?([.-][A-Za-z0-9]+)*$ ]] || { echo "Invalid version"; exit 1; }
 [[ "${VAULT:-}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ && -n "${GH_TOKEN:-}" ]] || { echo "Configure private vault and token"; exit 1; }
 [[ "$(gh api "repos/$VAULT" --jq '.private')" == true ]] || { echo "Vault must be private"; exit 1; }
 [[ "$VAULT" != "$GITHUB_REPOSITORY" ]] || { echo "Vault must be separate"; exit 1; }
@@ -60,11 +60,11 @@ with zipfile.ZipFile(sys.argv[1]) as z:
     found=set()
     for n in dex:
         d=z.read(n)
-        for marker in (b"Lapp/morphe/extension/mapsautomotive/patches/NatEvPlanner;",b"Lapp/morphe/extension/mapsautomotive/patches/NatDriverWork;",b"Lapp/morphe/extension/mapsautomotive/patches/NatNativeEvLayer;",b"Lapp/morphe/extension/mapsautomotive/patches/NatEvLearning;"):
+        for marker in (b"Lapp/morphe/extension/mapsautomotive/patches/NatEvPlanner;",b"Lapp/morphe/extension/mapsautomotive/patches/NatDriverWork;",b"Lapp/morphe/extension/mapsautomotive/patches/NatNativeEvLayer;",b"Lapp/morphe/extension/mapsautomotive/patches/NatEvLearning;",b"Lapp/morphe/extension/mapsautomotive/patches/NatDrivePower;"):
             if marker in d: found.add(marker)
         assert d[12:32]==hashlib.sha1(d[32:]).digest(), n
         assert struct.unpack_from("<I",d,8)[0]==zlib.adler32(d[12:]) & 0xffffffff,n
-    assert len(found)==4, "Missing required V4 candidate classes in patched APK"
+    assert len(found)==5, "Missing required V4 candidate classes in patched APK"
 PY
 (cd "$work/out"; sha256sum "NAT-Maps-V${VERSION}.apk" > SHA256SUMS.txt)
 printf 'Source: %s\nRun: %s / %s\nCLI: 2.4.0\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$work/out/build-info.txt"

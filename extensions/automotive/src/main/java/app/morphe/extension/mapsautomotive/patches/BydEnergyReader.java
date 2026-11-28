@@ -51,6 +51,8 @@ final class BydEnergyReader implements BydBatterySource {
     private static final int TOTAL_MILEAGE = 2;
     private static final int METRIC_UNIT = 1;
 
+    private final NatDrivePower drivePower=new NatDrivePower();
+    private Context appContext;
     private Object statistic;
     private Object power;
     private Method socGetter;
@@ -70,7 +72,8 @@ final class BydEnergyReader implements BydBatterySource {
     @Override
     public String init(Context context) {
         try {
-            ReadContext scoped = new ReadContext(context.getApplicationContext());
+            appContext=context.getApplicationContext();
+            ReadContext scoped = new ReadContext(appContext);
             Class<?> statisticClass = Class.forName("android.hardware.bydauto.statistic.BYDAutoStatisticDevice");
             Class<?> powerClass = Class.forName("android.hardware.bydauto.power.BYDAutoPowerDevice");
             statistic = statisticClass.getMethod("getInstance", Context.class).invoke(null, scoped);
@@ -126,13 +129,14 @@ final class BydEnergyReader implements BydBatterySource {
         return sample;
     }
 
-    /** Fast cache: only the existing, known read-only SOC and speed getters. Worker thread only. */
+    /** Fast cache: read-only SOC, speed and optional documented engine power. Worker thread only. */
     NatV33Telemetry.Fast readFast() {
         if(!ready()) return null;
         long now=SystemClock.elapsedRealtime();
         double soc=optionalNumber(socGetter,statistic), speed=Double.NaN;
         if(optionalUnit(speedUnitGetter,instrument)==METRIC_UNIT&&optionalUnit(mileageUnitGetter,instrument)==METRIC_UNIT)
             speed=optionalNumber(speedGetter,statistic);
+        if(appContext!=null)drivePower.poll(appContext,speed);
         return new NatV33Telemetry.Fast(now,soc>=0&&soc<=100?soc:Double.NaN,speed>=0&&speed<=250?speed:Double.NaN);
     }
 
