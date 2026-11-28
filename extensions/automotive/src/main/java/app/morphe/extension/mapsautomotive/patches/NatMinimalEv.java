@@ -143,7 +143,15 @@ final class NatMinimalEv {
     private static void layer(Activity a,State s){
         if(a.isFinishing()||a.isDestroyed()||!a.hasWindowFocus()||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY))return;
         if(s.evMode){exitEv(a,s);return;}
-        if(!setLayer(a,s,true)){toast(a,"Maps ยังไม่รองรับการเปิด EV Layer • ใช้การค้นหาสถานีใน Maps");return;}
+        if(!setLayer(a,s,true)){
+            // Some Maps builds expose charging search but not the MAIN EVCS layer.
+            // The user requested stations: open the native category when parked,
+            // leaving place names and map pins entirely to Maps.
+            NatV36Daily.Energy e=NatV36Daily.energy();
+            if(e!=null&&Double.isFinite(e.speed)&&e.speed>=0&&e.speed<=1){nearby(a);return;}
+            toast(a,"Maps ยังเปิดชั้นหมุด EV ไม่ได้ • จอดรถแล้วกดค้างเพื่อค้นหาสถานี");
+            return;
+        }
         s.restoreSplit=NatSplitScreen.active(a);s.evMode=true;
         if(s.restoreSplit)NatSplitScreen.temporaryToggle(a);
         report(s,"EV Full Map requested; native markers not yet visually verified");
