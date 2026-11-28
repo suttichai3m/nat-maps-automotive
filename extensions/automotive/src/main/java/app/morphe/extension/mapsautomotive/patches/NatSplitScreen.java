@@ -251,13 +251,13 @@ final class NatSplitScreen {
   LinearLayout m2=row(a);m2.setTag("nat_custom_forecast");add(body,m2,metricsH);s.remaining=metric(a,s,m2,"พลังงานที่ต้องใช้อีก",fg(s),false,false);s.rate=metric(a,s,m2,"อัตราสิ้นเปลืองคาดการณ์",fg(s),false,false);
   LinearLayout m3=row(a);m3.setTag("nat_custom_route");add(body,m3,metricsH);s.distance=metric(a,s,m3,"ระยะทาง (Maps)",fg(s),false,false);s.eta=metric(a,s,m3,"ถึงเวลา (Maps)",fg(s),false,false);
   LinearLayout ac=row(a);ac.setTag("nat_custom_climate");add(body,ac,metricsH);s.acDriver=metric(a,s,ac,"แอร์คนขับ",blue(s),false,false);s.acPassenger=metric(a,s,ac,"แอร์ผู้โดยสาร",blue(s),false,false);
-  add(body,text(a,"TODAY  •  สรุปการขับวันนี้",12,fg(s),true),dp(a,22));
-  LinearLayout daily=row(a);daily.setTag("nat_custom_daily");add(body,daily,metricsH);s.todayKm=metric(a,s,daily,"ระยะทางวันนี้",fg(s),false,false);s.todayEnergy=metric(a,s,daily,"พลังงานสุทธิที่บันทึก",fg(s),false,false);
-  LinearLayout costs=row(a);costs.setTag("nat_custom_cost");add(body,costs,metricsH);s.tariff=metric(a,s,costs,"ค่าไฟ / kWh  ⚙",blue(s),false,false);s.todayCost=metric(a,s,costs,"ค่าไฟวันนี้ (ประมาณ)",green(s),false,false);
+  add(body,text(a,"TODAY  •  ช่วงที่แอปบันทึกวันนี้",12,fg(s),true),dp(a,22));
+  LinearLayout daily=row(a);daily.setTag("nat_custom_daily");add(body,daily,metricsH);s.todayKm=metric(a,s,daily,"ระยะจาก ODO ที่บันทึก",fg(s),false,false);s.todayEnergy=metric(a,s,daily,"พลังงานสุทธิช่วงที่วัด",fg(s),false,false);
+  LinearLayout costs=row(a);costs.setTag("nat_custom_cost");add(body,costs,metricsH);s.tariff=metric(a,s,costs,"ค่าไฟ / kWh  ⚙",blue(s),false,false);s.todayCost=metric(a,s,costs,"ค่าไฟช่วงที่วัด (ประมาณ)",green(s),false,false);
   View tariffCell=(View)s.tariff.getParent();tariffCell.setTooltipText("แตะขยาย • กดค้างเพื่อตั้งค่าไฟเมื่อจอด");tariffCell.setOnLongClickListener(v->{NatV33Telemetry.Fast f=NatV33Telemetry.fast();if(f!=null&&Double.isFinite(f.speed)&&f.speed<=1)editTariff(a,s);else Toast.makeText(a,"ตั้งค่าเมื่อจอดรถ",Toast.LENGTH_SHORT).show();return true;});
   LinearLayout todayMore=row(a);todayMore.setTag("nat_custom_daily");add(body,todayMore,metricsH);s.todayDuration=metric(a,s,todayMore,"เวลาขับที่บันทึก",fg(s),false,false);s.todayRate=metric(a,s,todayMore,"สิ้นเปลืองช่วงที่วัด",fg(s),false,false);
   LinearLayout perKm=row(a);perKm.setTag("nat_custom_cost");add(body,perKm,metricsH);s.todayPerKm=metric(a,s,perKm,"ค่าไฟช่วงที่วัด / km",green(s),false,false);
-  s.dayNote=text(a,"ข้อมูลตามช่วงที่แอปบันทึก",10,muted(s),false);add(body,s.dayNote,dp(a,20));
+  s.dayNote=text(a,"รอข้อมูลรถ • เริ่มนับจากการเปิดแอปวันนี้",10,muted(s),false);add(body,s.dayNote,dp(a,34));
   LinearLayout v1=row(a);v1.setTag("nat_custom_temperature");add(body,v1,metricsH);s.outside=metric(a,s,v1,"อุณหภูมิภายนอก",fg(s),false,false);s.battTemp=metric(a,s,v1,"อุณหภูมิแบตเฉลี่ย",fg(s),false,false);
   LinearLayout v2=row(a);v2.setTag("nat_custom_tyres");add(body,v2,metricsH);s.tyresFront=metric(a,s,v2,"ยางหน้า L / R (PSI)",fg(s),false,false);s.tyresRear=metric(a,s,v2,"ยางหลัง L / R (PSI)",fg(s),false,false);
   LinearLayout v3=row(a);v3.setTag("nat_custom_health");add(body,v3,metricsH);s.soh=metric(a,s,v3,"SOH จาก BMS",green(s),false,false);s.byd=metric(a,s,v3,"ข้อมูล BYD",fg(s),false,false);
@@ -343,7 +343,12 @@ final class NatSplitScreen {
   NatV36Daily.Summary times=NatV36Daily.read(a);set(s.todayDuration,times==null?"—":NatV36Daily.duration(times.moving));
   double observed=t!=null&&t.detailPairs>0?Math.max(0,t.observedNet):Double.NaN,covered=t!=null&&t.detailPairs>0?t.observedKm:Double.NaN;
   set(s.todayRate,fmt(NatDailyMath.forecastRate(observed,covered),"kWh/100km"));double per=NatDailyMath.perKm(NatDailyMath.cost(observed,price),covered);set(s.todayPerKm,Double.isFinite(per)?String.format(Locale.US,"฿%.2f/km",per):"—");
-  set(s.dayNote,t==null?"รอข้อมูลวันนี้":"เฉพาะช่วงที่บันทึก • ไม่รวมการชาร์จ/ช่วงขาดข้อมูล");
+  if(t==null)set(s.dayNote,"รอข้อมูลรถ • เริ่มนับจากการเปิดแอปวันนี้");
+  else {
+   double missing=Math.max(0,t.km-t.observedKm);
+   String coverage=t.km>0?String.format(Locale.US,"วัดพลังงาน %.1f/%.1f km (%.0f%%)",t.observedKm,t.km,100*t.observedKm/t.km):"ยังไม่มีระยะที่วัดพลังงาน";
+   set(s.dayNote,coverage+" • ระยะขาดข้อมูล "+String.format(Locale.US,"%.1f km",missing)+"\nเริ่มนับเมื่อแอปอ่าน ODO • ไม่ใช่ยอดรถทั้งวัน • ไม่รวมการชาร์จ");
+  }
  }
  static void refreshFast(Activity a){
   State s=states.get(a);if(s==null||!active(a)||!a.hasWindowFocus()||!BydBatteryPatch.isActive())return;

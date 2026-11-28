@@ -6,7 +6,10 @@ final class NatDailyMath {
  static double range(double energy,double rate){return Double.isFinite(energy)&&energy>=0&&Double.isFinite(rate)&&rate>0&&rate<=99.9?energy*100/rate:Double.NaN;}
  static double distance(int from,int to){return from>=0&&to>=from?(to-(long)from)/10.0:Double.NaN;}
  static double net(long dt,int oldWh,int wh,double oldSpeed,double speed,double km){
-  if(dt<5000||dt>30000||oldWh<0||wh<0||!Double.isFinite(km)||km<0||km>250*dt/3600000.0+.2||!moving(oldSpeed)||!moving(speed))return Double.NaN;
+  if(dt<5000||dt>30000||oldWh<0||wh<0||!Double.isFinite(km)||km<0||km>250*dt/3600000.0+.2)return Double.NaN;
+  // Some BYD firmware does not expose the optional speed/unit getter. A valid
+  // odometer increment still proves movement, even when both speeds are absent.
+  if(!moving(oldSpeed)&&!moving(speed)&&km<=0)return Double.NaN;
   double delta=((long)oldWh-wh)/1000.0;
   return Math.abs(delta*3600000/dt)<=250?delta:Double.NaN;
  }

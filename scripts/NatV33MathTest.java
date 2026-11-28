@@ -8,6 +8,8 @@ public final class NatV33MathTest {
  check(eq(NatDailyMath.range(60,15),400));check(Double.isNaN(NatDailyMath.range(60,0)));
  check(eq(NatDailyMath.distance(584200,584215),1.5));check(Double.isNaN(NatDailyMath.distance(20,10)));
  check(eq(NatDailyMath.net(10000,50000,49900,30,30,.1),.1));check(eq(NatDailyMath.net(10000,50000,50100,30,30,.1),-.1));
+ check(eq(NatDailyMath.net(10000,50000,49900,Double.NaN,Double.NaN,.1),.1));
+ check(Double.isNaN(NatDailyMath.net(10000,50000,49900,Double.NaN,Double.NaN,0)));
  check(Double.isNaN(NatDailyMath.net(10000,50000,52000,0,0,0)));
  check(Double.isNaN(NatDailyMath.net(31000,50000,49900,30,30,.1)));
  check(Double.isNaN(NatDailyMath.net(10000,50000,49900,30,30,20)));
