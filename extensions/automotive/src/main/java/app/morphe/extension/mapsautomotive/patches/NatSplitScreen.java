@@ -355,6 +355,10 @@ final class NatSplitScreen {
   refreshZoom(s);
  }
  private static void metricLabel(TextView value,String label){if(value!=null&&value.getParent() instanceof LinearLayout){View v=((LinearLayout)value.getParent()).getChildAt(0);if(v instanceof TextView)set((TextView)v,label);}}
+ private static void batteryStatus(State s,TextView value,Integer percent,double reserve){
+  boolean low=percent!=null&&percent<reserve;
+  value.setTextColor(percent==null?fg(s):low?(s.dark?0xffff9b9b:0xffb91c1c):green(s));
+ }
  private static void updatePower(State s){
   if(s.power==null)return;
   NatDrivePower.Reading direct=BydBatteryPatch.isActive()?NatDrivePower.fresh():null;
@@ -380,7 +384,9 @@ final class NatSplitScreen {
   double reserve=a.getSharedPreferences("nat_v34_smart_ev",0).getFloat("reserve",15f);
   if(!Double.isFinite(reserve)||reserve<0||reserve>100)reserve=15;
   if(arrival!=null&&route!=null&&!route.held&&arrival<reserve)set(s.arrivalLabel,arrival<0?"พลังงานไม่พอ":"ต่ำกว่าแบตสำรอง "+Math.round(reserve)+"%");
-  s.arrival.setTextColor(arrival!=null&&arrival<reserve?(s.dark?0xffff9b9b:0xffb91c1c):blue(s));
+  metricLabel(s.soc,current!=null&&current<reserve?"แบตปัจจุบัน • เหลือน้อย":"แบตเตอรี่ปัจจุบัน");
+  batteryStatus(s,s.soc,current,reserve);
+  batteryStatus(s,s.arrival,arrival,reserve);
   set(s.speed,fmt(speed,"km/h"));
   String motion=!Double.isFinite(speed)?"ข้อมูลความเร็ว —":speed<=1?"จอดนิ่ง  •  PARKED":!Double.isFinite(turn)?"เคลื่อนที่  •  ทิศทาง —":turn<-3?"แนวโน้มเลี้ยวซ้าย":turn>3?"แนวโน้มเลี้ยวขวา":"แนวโน้มขับตรง";
   int motionColor=!Double.isFinite(speed)?muted(s):speed<=1?green(s):Double.isFinite(turn)&&Math.abs(turn)>3?(s.dark?0xffffc881:0xff945313):blue(s);
@@ -410,13 +416,13 @@ final class NatSplitScreen {
   boolean estimated=false;
   if(!Double.isFinite(energy)&&route!=null&&!route.held&&f!=null&&f.charges==0){
    // Same destination evidence, fresh no-charge snapshot and live SOC only; never estimate from a next charging stop.
-   double freshSoc=fast!=null?fast.soc:live.soc;
+   double freshSoc=fast!=null&&Double.isFinite(fast.soc)?fast.soc:live.soc;
    energy=NatReadableRules.estimate(f.soc,f.google,f.km,f.capacity,route.soc,route.km,freshSoc);
    estimated=Double.isFinite(energy);
   }
   set(s.remaining,fmt(energy,"kWh"));set(s.rate,fmt(NatDailyMath.forecastRate(energy,route==null?Double.NaN:route.km),"kWh/100km"));
-  metricLabel(s.remaining,estimated?"พลังงานที่ต้องใช้อีก (ประมาณ)":"พลังงานที่ต้องใช้อีก (Maps)");
-  metricLabel(s.rate,estimated?"สิ้นเปลืองคาดการณ์ (ประมาณ)":"สิ้นเปลืองคาดการณ์ (Maps)");
+  metricLabel(s.remaining,estimated?"พลังงานที่ต้องใช้อีก ≈ kWh":"พลังงานที่ต้องใช้อีก (kWh)");
+  metricLabel(s.rate,estimated?"สิ้นเปลืองคาดการณ์ ≈ kWh/100 km":"สิ้นเปลืองคาดการณ์ (kWh/100 km)");
   set(s.distance,fmt(route==null?Double.NaN:route.km,"km"));
   String eta=route==null?null:route.eta;set(s.eta,eta==null?"—":eta);
   String gps;

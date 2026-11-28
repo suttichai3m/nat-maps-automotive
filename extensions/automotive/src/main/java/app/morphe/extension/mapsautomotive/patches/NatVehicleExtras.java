@@ -64,9 +64,14 @@ final class NatVehicleExtras {
      if(zones[i]==Integer.MIN_VALUE){info.append("\n").append(labels[i]).append(" zone constant missing");continue;}
      int st=get(signal,tyre,zones[i]),kpa=get(pressure,tyre,zones[i]),typed=get(pressureByType,tyre,zones[i]),temperature=get(tyreTemperature,tyre,zones[i]);
      info.append("\n").append(labels[i]).append(" signal=").append(raw(st)).append(" kPa getter=").append(raw(kpa)).append(" ByType raw=").append(raw(typed)).append(" temp raw=").append(raw(temperature));
-     if(normal!=Integer.MIN_VALUE&&st==normal){double psi=NatEvPlanRules.pressure(selected,kpa,typed);v[i]=Double.isFinite(psi)?String.format(Locale.US,"%.1f",psi):"—";}
+     boolean normalSignal=normal!=Integer.MIN_VALUE&&st==normal;
+     boolean noSignalApi=signal==null&&selected==0;
+     if(normalSignal||noSignalApi){
+      double psi=NatEvPlanRules.pressure(selected,kpa,typed);
+      if(Double.isFinite(psi))v[i]=String.format(Locale.US,noSignalApi?"~%.1f":"%.1f",psi);
+     }
     }
-    info.append("\nPressure mode: ").append(selected).append(" • Temperature raw unit not verified");
+    info.append("\nPressure mode: ").append(selected).append(" • ~ = ค่า kPa จาก SDK ที่ไม่มีตัวอ่านสถานะล้อ • Temperature raw unit not verified");
     info.append("\nNormal signal code: ").append(normal).append("\nรถจอดอาจพัก TPMS • ตรวจเทียบกับหน้าปัด");
     tyreDiag=info.toString();
    }

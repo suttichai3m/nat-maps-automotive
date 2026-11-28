@@ -121,7 +121,7 @@ final class NatMinimalEv {
         s.layerStatus="Native EV layer: show="+c.showLayer.size()+" hide="+c.hideLayer.size()+" filter="+c.layerFilter+" map="+c.mapControls+" results="+c.results;
     }
     static String layerStatus(Activity a){State s=STATES.get(a);return NatNativeEvLayer.status()+"\n"+(s==null?"Native EV controls: not observed":s.layerStatus);}
-    static String layerButtonLabel(Activity a){State s=STATES.get(a);return s!=null&&s.evMode?"Exit EV":"EV Charging";}
+    static String layerButtonLabel(Activity a){State s=STATES.get(a);return s!=null&&s.evMode?"ซ่อนสถานีชาร์จ":"แสดงสถานีชาร์จ";}
     static boolean evMode(Activity a){State s=STATES.get(a);return s!=null&&s.evMode;}
     private static boolean setLayer(Activity a,State s,boolean show){
         View root=a.getWindow().peekDecorView();if(root==null)return false;

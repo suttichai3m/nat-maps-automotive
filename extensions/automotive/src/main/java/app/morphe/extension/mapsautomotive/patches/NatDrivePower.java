@@ -15,6 +15,7 @@ final class NatDrivePower {
  private static volatile String status="waiting for dashboard";
  private static volatile double lastRaw=Double.NaN,peakPower=Double.NaN,peakRegen=Double.NaN;
  private static volatile long rawAt=-1,lastChangeAt=-1;private static volatile long samples;
+ private static volatile String returnType="unknown";
  private Object device;private Method getter;private long nextTry;
  void poll(Context context,double speed){
   long now=SystemClock.elapsedRealtime();
@@ -23,7 +24,7 @@ final class NatDrivePower {
    if(device==null){
     Class<?> c=Class.forName("android.hardware.bydauto.engine.BYDAutoEngineDevice");
     Method m=c.getMethod("getEnginePower");
-    if(m.getReturnType()!=Integer.TYPE&&m.getReturnType()!=Integer.class)throw new NoSuchMethodException("unexpected return type");
+    returnType=m.getReturnType().getName();
     Object d=c.getMethod("getInstance",Context.class).invoke(null,context.getApplicationContext());
     if(d==null)throw new IllegalStateException("SDK returned null");
     device=d;getter=m;
@@ -39,14 +40,14 @@ final class NatDrivePower {
     if(raw<0)peakRegen=Double.isFinite(peakRegen)?Math.min(peakRegen,raw):raw;
    }
   }catch(Throwable e){
-   reading=null;status="SDK unavailable: "+BydEnergyReader.describe(e);device=null;getter=null;nextTry=SystemClock.elapsedRealtime()+30000;
+   reading=null;status="SDK unavailable: "+BydEnergyReader.describe(e);device=null;getter=null;nextTry=SystemClock.elapsedRealtime()+3000;
   }
  }
  static Reading fresh(){Reading r=reading;return r!=null&&BydBatteryPatch.isActive()&&NatDrivePowerRules.fresh(SystemClock.elapsedRealtime(),r.at)?r:null;}
  private static Object number(double v){return Double.isFinite(v)?v:JSONObject.NULL;}
  static JSONObject diagnostics() throws org.json.JSONException {
   Reading r=fresh();long now=SystemClock.elapsedRealtime(),at=rawAt;
-  return new JSONObject().put("source",SOURCE).put("status",status).put("fresh",r!=null)
+  return new JSONObject().put("source",SOURCE).put("sdk_return_type",returnType).put("status",status).put("fresh",r!=null)
    .put("last_raw_kw",number(lastRaw)).put("raw_age_ms",at>=0&&now>=at?now-at:JSONObject.NULL)
    .put("sample_count",samples).put("unchanged_ms",lastChangeAt>=0&&now>=lastChangeAt?now-lastChangeAt:JSONObject.NULL)
    .put("live_kw",number(r==null?Double.NaN:r.kw)).put("sample_speed_kmh",number(r==null?Double.NaN:r.speed))
