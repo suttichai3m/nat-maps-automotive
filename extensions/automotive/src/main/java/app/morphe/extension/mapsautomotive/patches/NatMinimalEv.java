@@ -238,7 +238,7 @@ final class NatMinimalEv {
             NatSystemDiagnostics.show(a);
         });
         t.setTooltipText("System Diagnostics — CPU / RAM / GPS (hold: Split / Full Map)");
-        t.setOnLongClickListener(v->{NatSplitScreen.toggle(a);return true;});
+        t.setOnLongClickListener(v->{if(evMode(a)){State st=STATES.get(a);if(st!=null)exitEv(a,st);}else NatSplitScreen.toggle(a);return true;});
         return t;
     }
     private static TextView snowButton(Activity a){return toolbarButton(a,"❄","Snow AI",()->NatV36Shortcuts.snow(a));}

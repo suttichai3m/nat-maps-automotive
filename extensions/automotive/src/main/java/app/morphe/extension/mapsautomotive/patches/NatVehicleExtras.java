@@ -13,9 +13,15 @@ final class NatVehicleExtras {
  private static volatile Values cached;
  private static long last=-1,initAc=-60000,initTyre=-60000;
  private static Object ac,tyre;
- private static Method temp,unit,state,pressure,signal,systemState;
+ private static Method temp,unit,state,pressure,signal,systemState,pressureByType,tyreTemperature;
+ private static final String CAL="nat_tpms_calibration";
+ private static Method optional(Class<?> t,String name){try{return t.getMethod(name,int.class);}catch(NoSuchMethodException e){return null;}}
  private static volatile String tyreDiag="TPMS: waiting for sample";
  static String tyreDiagnostics(){return tyreDiag;}
+ static void configure(android.app.Activity a){
+  android.content.SharedPreferences p=a.getSharedPreferences(CAL,0);int n=p.getInt("pressure_mode",0);if(n<0||n>2)n=0;
+  new android.app.AlertDialog.Builder(a).setTitle("TPMS • เลือกหน่วยหลังเทียบ 4 ล้อกับ OverDrive ขณะจอดเท่านั้น").setSingleChoiceItems(new String[]{"มาตรฐาน kPa (เดิม)","ByType / 10 = PSI (ยืนยันแล้ว)","ByType = kPa (ยืนยันแล้ว)"},n,(d,w)->{p.edit().putInt("pressure_mode",w).apply();d.dismiss();}).setNegativeButton("ปิด",null).show();
+ }
  private static int mainZone,deputyZone,normal;private static int[] zones;
  private static String front="—",rear="—";private static long tyreAt=-1;
  static Values read(){Values v=cached;return BydBatteryPatch.isActive()&&v!=null&&NatSplitMath.fresh(SystemClock.elapsedRealtime(),v.at,3500)?v:null;}
@@ -39,6 +45,7 @@ final class NatVehicleExtras {
   if(tyre==null&&now-initTyre>=30000){initTyre=now;try{
    Class<?> t=Class.forName("android.hardware.bydauto.tyre.BYDAutoTyreDevice");
    pressure=t.getMethod("getTyrePressureValue",int.class);signal=t.getMethod("getTyreSignalState",int.class);
+   pressureByType=optional(t,"getTyrePressureValueByType");tyreTemperature=optional(t,"getTyreTemperatureValue");
    normal=constant(t,"TYRE_SIGNAL_STATE_NORMAL");
    zones=new int[]{constant(t,"TYRE_COMMAND_AREA_LEFT_FRONT"),constant(t,"TYRE_COMMAND_AREA_RIGHT_FRONT"),constant(t,"TYRE_COMMAND_AREA_LEFT_REAR"),constant(t,"TYRE_COMMAND_AREA_RIGHT_REAR")};
    tyre=device(t,c);try{systemState=t.getMethod("getTyreSystemState");}catch(NoSuchMethodException e){systemState=null;}
@@ -50,7 +57,13 @@ final class NatVehicleExtras {
     StringBuilder info=new StringBuilder("TPMS • raw diagnostic (not confirmed PSI)");
     if(systemState!=null)info.append("\nSystem state: ").append(raw(get(systemState,tyre)));
     String[] labels={"FL","FR","RL","RR"};
-    for(int i=0;i<4;i++){int st=get(signal,tyre,zones[i]),kpa=get(pressure,tyre,zones[i]);info.append("\n").append(labels[i]).append(" signal=").append(raw(st)).append(" raw=").append(raw(kpa));if(st==normal)v[i]=NatV35Rules.psi(kpa);}
+    int selected=c.getSharedPreferences(CAL,0).getInt("pressure_mode",0);
+    for(int i=0;i<4;i++){
+     int st=get(signal,tyre,zones[i]),kpa=get(pressure,tyre,zones[i]),typed=get(pressureByType,tyre,zones[i]),temperature=get(tyreTemperature,tyre,zones[i]);
+     info.append("\n").append(labels[i]).append(" signal=").append(raw(st)).append(" kPa getter=").append(raw(kpa)).append(" ByType raw=").append(raw(typed)).append(" temp raw=").append(raw(temperature));
+     if(st==normal){double psi=NatEvPlanRules.pressure(selected,kpa,typed);v[i]=Double.isFinite(psi)?String.format(Locale.US,"%.1f",psi):"—";}
+    }
+    info.append("\nPressure mode: ").append(selected).append(" • Temperature raw unit not verified");
     info.append("\nNormal signal code: ").append(normal).append("\nรถจอดอาจพัก TPMS • ตรวจเทียบกับหน้าปัด");
     tyreDiag=info.toString();
    }

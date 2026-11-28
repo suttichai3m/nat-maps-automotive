@@ -1,11 +1,14 @@
 name: NAT Cloud APK Builder
 on:
+  push:
+    branches: [map-original]
+    paths: ['NAT-V4.0-RELEASE-CANDIDATE.md']
   workflow_dispatch:
     inputs:
       version:
         description: APK label (e.g. 2.0.2)
         required: true
-        default: '2.0.2'
+        default: '4.0.1'
       mode:
         description: Build or generate default options for review
         type: choice
@@ -41,7 +44,7 @@ jobs:
       - name: Test all NAT modules
         run: |
           set -euo pipefail
-          for s in signed-soc navigation-summary theme-schedule battery-placement integrated-battery; do
+          for s in signed-soc navigation-summary theme-schedule battery-placement integrated-battery nat-v33 nat-v34 nat-v35 nat-v36 nat-favorites nat-ev-layer nat-driver nat-ev-plan; do
             bash "scripts/test-$s.sh"
           done
       - name: Build MPP
@@ -61,6 +64,6 @@ jobs:
           STORE_PASSWORD: ${{ secrets.NAT_KEYSTORE_PASSWORD }}
           ENTRY_ALIAS: ${{ vars.NAT_KEY_ALIAS }}
           ENTRY_PASSWORD: ${{ secrets.NAT_KEY_PASSWORD }}
-          VERSION: ${{ inputs.version }}
-          MODE: ${{ inputs.mode }}
+          VERSION: ${{ inputs.version || '4.0.1' }}
+          MODE: ${{ inputs.mode || 'build' }}
         run: bash scripts/nat-cloud-apk.sh

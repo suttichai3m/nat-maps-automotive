@@ -44,6 +44,8 @@ jobs:
         run: bash scripts/test-nat-ev-layer.sh
       - name: Driver work math and state tests
         run: bash scripts/test-nat-driver.sh
+      - name: EV planner and telemetry validation tests
+        run: bash scripts/test-nat-ev-plan.sh
       - name: Build patch
         env:
           GITHUB_ACTOR: ${{ github.actor }}

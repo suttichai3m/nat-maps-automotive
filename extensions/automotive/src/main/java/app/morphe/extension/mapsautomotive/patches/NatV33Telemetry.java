@@ -46,6 +46,8 @@ final class NatV33Telemetry {
  static void sample(Context c,BydEnergyReader.Sample s){
   try{NatV36Daily.observe(c,s);}catch(RuntimeException ignored){}
   try{NatDriverWork.sample(c,s);}catch(RuntimeException ignored){}
+  try{NatEvLearning.observe(c,s);}catch(RuntimeException ignored){}
+  try{NatReadOnlyVehicle.poll(c);}catch(RuntimeException ignored){}
   String d=day(s.wall);SharedPreferences pref=prefs(c);
   if(!d.equals(day)){
    try{NatMonthlyEv.archive(c,pref,d);}catch(RuntimeException ignored){}

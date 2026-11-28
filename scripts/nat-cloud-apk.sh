@@ -57,10 +57,14 @@ with zipfile.ZipFile(sys.argv[1]) as z:
     assert z.testzip() is None, "ZIP CRC failure"
     dex=[n for n in z.namelist() if n.startswith("classes") and n.endswith(".dex")]
     assert dex and any(n.startswith("lib/arm64-v8a/") for n in z.namelist()), "Missing DEX or ARM64 libraries"
+    found=set()
     for n in dex:
         d=z.read(n)
+        for marker in (b"Lapp/morphe/extension/mapsautomotive/patches/NatEvPlanner;",b"Lapp/morphe/extension/mapsautomotive/patches/NatDriverWork;",b"Lapp/morphe/extension/mapsautomotive/patches/NatNativeEvLayer;",b"Lapp/morphe/extension/mapsautomotive/patches/NatEvLearning;"):
+            if marker in d: found.add(marker)
         assert d[12:32]==hashlib.sha1(d[32:]).digest(), n
         assert struct.unpack_from("<I",d,8)[0]==zlib.adler32(d[12:]) & 0xffffffff,n
+    assert len(found)==4, "Missing required V4 candidate classes in patched APK"
 PY
 (cd "$work/out"; sha256sum "NAT-Maps-V${VERSION}.apk" > SHA256SUMS.txt)
 printf 'Source: %s\nRun: %s / %s\nCLI: 2.4.0\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$work/out/build-info.txt"

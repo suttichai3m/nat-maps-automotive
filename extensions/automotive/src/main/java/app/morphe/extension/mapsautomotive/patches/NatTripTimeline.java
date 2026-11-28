@@ -144,8 +144,8 @@ final class NatTripTimeline {
             if(cursor>=0&&cursor<points.size()){Point p=points.get(cursor);paint.setColor(0xff60a5fa);canvas.drawCircle((float)(20+(p.lon-minX)*scale),(float)(getHeight()-20-(p.lat-minY)*scale),9,paint);}
         }
     }
-    private static long day(int offset){Calendar c=Calendar.getInstance();c.set(Calendar.HOUR_OF_DAY,0);c.set(Calendar.MINUTE,0);c.set(Calendar.SECOND,0);c.set(Calendar.MILLISECOND,0);c.add(Calendar.DATE,offset);return c.getTimeInMillis();}
-    private static String fmt(long t,String pattern){return new SimpleDateFormat(pattern,Locale.getDefault()).format(new Date(t));}
+    private static long day(int offset){Calendar c=Calendar.getInstance(TimeZone.getTimeZone("Asia/Bangkok"));c.set(Calendar.HOUR_OF_DAY,0);c.set(Calendar.MINUTE,0);c.set(Calendar.SECOND,0);c.set(Calendar.MILLISECOND,0);c.add(Calendar.DATE,offset);return c.getTimeInMillis();}
+    private static String fmt(long t,String pattern){SimpleDateFormat f=new SimpleDateFormat(pattern,Locale.getDefault());f.setTimeZone(TimeZone.getTimeZone("Asia/Bangkok"));return f.format(new Date(t));}
     static void show(Activity a){
         if(a==null||a.isFinishing())return;
         Context c=a;LinearLayout body=new LinearLayout(c);body.setOrientation(1);body.setPadding(20,16,20,16);
@@ -186,6 +186,11 @@ final class NatTripTimeline {
                         TextView replay=new TextView(c);replay.setText("Replay / เลื่อนดูเวลา");route.addView(replay);
                         SeekBar seek=new SeekBar(c);seek.setMax(Math.max(0,data.size()-1));seek.setEnabled(data.size()>1);route.addView(seek);
                         seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onStartTrackingTouch(SeekBar b){} public void onStopTrackingTouch(SeekBar b){} public void onProgressChanged(SeekBar b,int n,boolean user){if(n<data.size()){Point p=data.get(n);map.seek(n);replay.setText(fmt(p.time,"yyyy-MM-dd HH:mm:ss")+(Double.isFinite(p.soc)?String.format(Locale.US," • SOC %.1f%%",p.soc):""));}}});
+                        Button play=new Button(c);play.setText("Play / Pause replay • จุดที่บันทึก");route.addView(play);
+                        final boolean[] running={false};
+                        Runnable replayTick=new Runnable(){public void run(){if(!running[0]||a.isDestroyed()||request!=generation[0]){running[0]=false;return;}int n=seek.getProgress()+1;if(n>=data.size()){running[0]=false;play.setText("Play replay");return;}seek.setProgress(n);WATCH.postDelayed(this,350);}};
+                        play.setOnClickListener(v->{if(data.size()<2)return;if(running[0]){running[0]=false;WATCH.removeCallbacks(replayTick);play.setText("Play replay");return;}if(seek.getProgress()>=data.size()-1)seek.setProgress(0);running[0]=true;play.setText("Pause replay");WATCH.postDelayed(replayTick,350);});
+                        TextView gaps=new TextView(c);gaps.setText("ช่วงขาด GPS อาจเป็นจอดรถหรือขาดสัญญาณ ไม่ยืนยันเวลาจอด");rows.addView(gaps);
                         for(String label:labels){TextView line=new TextView(c);line.setText(label);line.setPadding(0,8,0,8);rows.addView(line);}
                     });
                 }catch(RuntimeException e){a.runOnUiThread(()->{if(request==generation[0])summary.setText("History unavailable");});}
@@ -233,7 +238,7 @@ final class NatTripTimeline {
         erase.setOnClickListener(v->new AlertDialog.Builder(a).setMessage("Delete all private GPS history? Existing exported copies are not deleted.").setNegativeButton("Cancel",null).setPositiveButton("Delete",(d,w)->{
             toggle.setChecked(false);toggle.setEnabled(false);IO.execute(()->{try{store(c).getWritableDatabase().delete("points",null,null);a.runOnUiThread(()->{toggle.setEnabled(true);refresh.run();});}catch(RuntimeException e){a.runOnUiThread(()->{toggle.setEnabled(true);summary.setText("Delete failed");});}});
         }).show());
-        AlertDialog dialog=new AlertDialog.Builder(a).setTitle("NAT V2.0 • Trip Timeline").setView(scroll).setPositiveButton("Close",null).create();dialog.setOnDismissListener(d->generation[0]++);dialog.show();
+        AlertDialog dialog=new AlertDialog.Builder(a).setTitle("NAT • Driving Timeline Pro").setView(scroll).setPositiveButton("Close",null).create();dialog.setOnDismissListener(d->generation[0]++);dialog.show();
         Runnable update=new Runnable(){public void run(){if(!dialog.isShowing()||a.isDestroyed())return;live.setText(enabled(c)&&SystemClock.elapsedRealtime()-lastSample<=35000?liveEnergy:"Battery power estimate unavailable");WATCH.postDelayed(this,2000);}};update.run();
         refresh.run();
     }

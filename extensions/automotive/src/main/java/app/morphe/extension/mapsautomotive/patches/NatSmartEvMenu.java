@@ -90,10 +90,11 @@ final class NatSmartEvMenu {
   action("Monthly EV Intelligence",()->closeThen(()->NatMonthlyEv.show(a)));
   action("Smart Resume / Driving Mode",()->closeThen(()->NatSplitScreen.personalize(a)));
   action("★  Favorite Destinations • สถานที่โปรด",()->closeThen(()->NatFavorites.show(a)));
-  action("⚡  Smart Charging Assistant",this::charging);
-  action("◷  Daily Driving Timeline",()->closeThen(()->NatTripTimeline.show(a)));
+  action("Smart EV Prediction Simulator • ไป–กลับ",()->closeThen(()->NatEvPlanner.show(a)));
+  action("⚡  Smart Charging Advisor",this::charging);
+  action("◷  Driving Timeline Pro",()->closeThen(()->NatTripTimeline.show(a)));
   action("▥  Energy Intelligence",this::energy);
-  action("＋  Vehicle Health Monitor",this::health);
+  action("＋  Vehicle Health Center",this::health);
   action("❄  Snow AI",()->closeThen(()->NatV36Shortcuts.snow(a)));
   action("OverDrive",()->closeThen(()->NatV36Shortcuts.control(a)));
   action("ตั้งค่าปุ่ม OverDrive",()->closeThen(()->NatV36Shortcuts.configureOverDrive(a)));
@@ -136,6 +137,7 @@ final class NatSmartEvMenu {
   };
   calc.run();action("คำนวณ / บันทึกเป้าหมาย",calc);
   line("ค่าประมาณ ณ เวลาเปิด • ไม่รวมการสูญเสียและช่วงลดกำลังชาร์จ • ไม่ยืนยันว่ามีสถานีว่าง");
+  if(valid&&route.charges==0&&route.google<reserve)line("คำแนะนำ: ตรวจสอบสถานีบน Native Maps ก่อนออกเดินทาง และเผื่อระยะสำรอง");
   line(NatMinimalEv.layerStatus(a));
   action("EV Charging Full Map • Native layer",()->closeThen(()->NatMinimalEv.splitAction(a,0)));
   action("ค้นหาสถานีชาร์จ (Maps) • ทางเลือกเดิม",()->closeThen(()->NatMinimalEv.splitAction(a,5)));
@@ -190,7 +192,7 @@ final class NatSmartEvMenu {
  }
  private String jsonValue(JSONObject j,String key,String suffix){return j==null||j.isNull(key)?"—":j.optString(key,"—")+suffix;}
  private void health(){
-  heading("Vehicle Health Monitor");
+  heading("Vehicle Health Center");
   JSONObject j=null;try{j=BydBatteryPatch.natHealthSnapshot();}catch(Exception ignored){}
   JSONObject temp=j==null?null:j.optJSONObject("temp_c");
   long age=j==null?-1:j.optLong("soh_read_age_s",-1),ta=j==null?-1:j.optLong("temp_read_age_s",-1);
@@ -203,7 +205,16 @@ final class NatSmartEvMenu {
   NatVehicleExtras.Values e=NatVehicleExtras.read();
   metric("ยางหน้า L / R (PSI)",e==null?"—":e.front);metric("ยางหลัง L / R (PSI)",e==null?"—":e.rear);
   line(NatVehicleExtras.tyreDiagnostics());
-  metric("12V","ยังไม่รองรับ");
+  NatReadOnlyVehicle.Values v=NatReadOnlyVehicle.read();
+  metric("เกียร์",v==null?"—":v.gear);
+  metric("ประตูหน้า L / R",v==null?"—":v.front);
+  metric("ประตูหลัง L / R",v==null?"—":v.rear);
+  metric("12V • ระดับแรงดัน SDK",v==null?"—":v.lowVoltage);
+  metric("12V • ค่า V จริง","ยังไม่ยืนยัน");
+  metric("ล็อกประตู","ยังไม่ยืนยัน • สถานะปิดไม่เท่ากับล็อก");
+  line(NatReadOnlyVehicle.status());
+  action("ตั้งค่า TPMS / ตรวจเทียบกับ OverDrive",()->NatVehicleExtras.configure(a));
+  action("Service Reminder",this::service);
   action("TPMS Diagnostics",()->new AlertDialog.Builder(a).setTitle("TPMS • SDK status").setMessage(NatVehicleExtras.tyreDiagnostics()).setPositiveButton("ปิด",null).show());
   line("อ่านจากข้อมูลสุขภาพแบตเดิมของ BYD • ไม่ใช่การวินิจฉัยความปลอดภัยของรถ • ไม่แสดงค่าที่หมดอายุ");
   action("รีเฟรชข้อมูล",this::health);action("System Diagnostics",()->closeThen(()->NatMinimalEv.splitAction(a,4)));action("‹ กลับเมนู",this::home);

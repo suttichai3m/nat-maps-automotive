@@ -273,7 +273,7 @@ final class NatSplitScreen {
   if(!active(a)||!a.hasWindowFocus())return;
   boolean[] selected=new boolean[CUSTOM_KEYS.length];for(int i=0;i<selected.length;i++)selected[i]=customPrefs(a).getBoolean(CUSTOM_KEYS[i],true);
   new android.app.AlertDialog.Builder(a).setTitle("Custom Dashboard").setMultiChoiceItems(CUSTOM_NAMES,selected,(d,i,b)->selected[i]=b)
-   .setNegativeButton("ยกเลิก",null).setNeutralButton("แสดงทั้งหมด",(d,w)->{customPrefs(a).edit().clear().apply();State s=states.get(a);if(s!=null)applyCustom(a,s);})
+   .setNegativeButton("ยกเลิก",null).setNeutralButton("แสดงทั้งหมด",(d,w)->{android.content.SharedPreferences.Editor editor=customPrefs(a).edit();for(String k:CUSTOM_KEYS)editor.remove(k);editor.apply();State s=states.get(a);if(s!=null)applyCustom(a,s);})
    .setPositiveButton("บันทึก",(d,w)->{android.content.SharedPreferences.Editor e=customPrefs(a).edit();for(int i=0;i<selected.length;i++)e.putBoolean(CUSTOM_KEYS[i],selected[i]);e.apply();State s=states.get(a);if(s!=null)applyCustom(a,s);}).show();
  }
  private static void listen(Activity a,State s){
@@ -339,7 +339,10 @@ final class NatSplitScreen {
   set(s.soc,NatSplitMath.percent(current));set(s.arrival,NatSplitMath.percent(arrival));
   ((View)s.arrival.getParent()).setVisibility(NatNavigationCard.hasVisibleCard(root)&&(route==null||!route.held)?View.GONE:View.VISIBLE);
   set(s.arrivalLabel,route!=null&&route.held?"แบตถึง • ล่าสุด":match?"แบตเมื่อถึงปลายทาง":"แบตเมื่อถึง (Maps)");
-  s.arrival.setTextColor(arrival!=null&&arrival<20?(s.dark?0xffff9b9b:0xffb91c1c):blue(s));
+  double reserve=a.getSharedPreferences("nat_v34_smart_ev",0).getFloat("reserve",15f);
+  if(!Double.isFinite(reserve)||reserve<0||reserve>100)reserve=15;
+  if(arrival!=null&&route!=null&&!route.held&&arrival<reserve)set(s.arrivalLabel,arrival<0?"พลังงานไม่พอ":"ต่ำกว่าแบตสำรอง "+Math.round(reserve)+"%");
+  s.arrival.setTextColor(arrival!=null&&arrival<reserve?(s.dark?0xffff9b9b:0xffb91c1c):blue(s));
   set(s.speed,fmt(speed,"km/h"));
   String motion=!Double.isFinite(speed)?"ข้อมูลความเร็ว —":speed<=1?"จอดนิ่ง  •  PARKED":!Double.isFinite(turn)?"เคลื่อนที่  •  ทิศทาง —":turn<-3?"แนวโน้มเลี้ยวซ้าย":turn>3?"แนวโน้มเลี้ยวขวา":"แนวโน้มขับตรง";
   int motionColor=!Double.isFinite(speed)?muted(s):speed<=1?green(s):Double.isFinite(turn)&&Math.abs(turn)>3?(s.dark?0xffffc881:0xff945313):blue(s);
@@ -375,7 +378,8 @@ final class NatSplitScreen {
   else gps=NatSplitMath.fresh(now,s.fixAt,3000)?"FIX":"NO FIX";
   set(s.gps,gps);s.gps.setTextColor("FIX".equals(gps)?green(s):muted(s));
   String byd="—";try{org.json.JSONObject v=BydBatteryPatch.diagnosticSnapshot();String state=v.optString("status","unknown");byd="fresh".equals(state)?"Fresh":state.equals("inactive")?"Inactive":"No fresh data";}catch(Exception ignored){}
-  set(s.byd,byd);s.byd.setTextColor("Fresh".equals(byd)?green(s):muted(s));
+  NatReadOnlyVehicle.Values vehicle=NatReadOnlyVehicle.read();if(vehicle!=null&&!vehicle.gear.equals("—"))byd+=" • "+vehicle.gear;
+  set(s.byd,byd);s.byd.setTextColor(byd.startsWith("Fresh")?green(s):muted(s));
   applyCustom(a,s);
 
  }
