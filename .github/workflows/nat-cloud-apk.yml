@@ -67,7 +67,7 @@ jobs:
       - name: Test all NAT modules
         run: |
           set -euo pipefail
-          for s in signed-soc navigation-summary theme-schedule battery-placement integrated-battery nat-v33 nat-v34 nat-v35 nat-v36 nat-favorites nat-ev-layer nat-driver nat-ev-plan nat-drive-power; do
+          for s in signed-soc navigation-summary theme-schedule battery-placement integrated-battery nat-v33 nat-v34 nat-v35 nat-v36 nat-favorites nat-ev-layer nat-driver nat-ev-plan nat-drive-power nat-readable; do
             bash "scripts/test-$s.sh"
           done
       - name: Build MPP

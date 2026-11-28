@@ -14,7 +14,7 @@ final class NatDrivePower {
  private static volatile Reading reading;
  private static volatile String status="waiting for dashboard";
  private static volatile double lastRaw=Double.NaN,peakPower=Double.NaN,peakRegen=Double.NaN;
- private static volatile long rawAt=-1;
+ private static volatile long rawAt=-1,lastChangeAt=-1;private static volatile long samples;
  private Object device;private Method getter;private long nextTry;
  void poll(Context context,double speed){
   long now=SystemClock.elapsedRealtime();
@@ -31,7 +31,7 @@ final class NatDrivePower {
    Object value=BydEnergyReader.invoke(getter,device);
    long at=SystemClock.elapsedRealtime();
    double raw=value instanceof Number?((Number)value).doubleValue():Double.NaN;
-   lastRaw=raw;rawAt=at;
+   if(Double.compare(raw,lastRaw)!=0)lastChangeAt=at;lastRaw=raw;rawAt=at;samples++;
    if(!NatDrivePowerRules.valid(raw)){reading=null;status="invalid SDK power";return;}
    reading=new Reading(at,raw,speed);status="SDK read OK (cluster comparison pending)";
    if(NatDrivePowerRules.moving(speed)){
@@ -48,6 +48,7 @@ final class NatDrivePower {
   Reading r=fresh();long now=SystemClock.elapsedRealtime(),at=rawAt;
   return new JSONObject().put("source",SOURCE).put("status",status).put("fresh",r!=null)
    .put("last_raw_kw",number(lastRaw)).put("raw_age_ms",at>=0&&now>=at?now-at:JSONObject.NULL)
+   .put("sample_count",samples).put("unchanged_ms",lastChangeAt>=0&&now>=lastChangeAt?now-lastChangeAt:JSONObject.NULL)
    .put("live_kw",number(r==null?Double.NaN:r.kw)).put("sample_speed_kmh",number(r==null?Double.NaN:r.speed))
    .put("peak_power_kw_process",number(peakPower)).put("peak_regen_kw_process",number(peakRegen));
  }

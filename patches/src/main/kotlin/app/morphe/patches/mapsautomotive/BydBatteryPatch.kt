@@ -539,11 +539,12 @@ internal fun addNatLauncherQueries(document: Document) {
 
 // Declare only the documented read permission. Android/BYD still enforce actual access.
 internal fun addNatEngineReadPermission(document: Document) {
-    val name = "android.permission.BYDAUTO_ENGINE_GET"
-    val permissions = document.getElementsByTagName("uses-permission")
-    for (index in 0 until permissions.length) if ((permissions.item(index) as Element).getAttribute("android:name") == name) return
     val root = document.documentElement
-    val permission = document.createElement("uses-permission").apply { setAttribute("android:name", name) }
     val application = document.getElementsByTagName("application").item(0)
-    root.insertBefore(permission, application)
+    for (name in listOf("android.permission.BYDAUTO_ENGINE_GET", "android.permission.BYDAUTO_TYRE_GET")) {
+        val permissions = document.getElementsByTagName("uses-permission")
+        if ((0 until permissions.length).any { (permissions.item(it) as Element).getAttribute("android:name") == name }) continue
+        val permission = document.createElement("uses-permission").apply { setAttribute("android:name", name) }
+        root.insertBefore(permission, application)
+    }
 }

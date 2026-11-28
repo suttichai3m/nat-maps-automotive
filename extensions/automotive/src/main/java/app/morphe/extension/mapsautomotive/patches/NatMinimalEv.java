@@ -148,6 +148,26 @@ final class NatMinimalEv {
         if(s.restoreSplit)NatSplitScreen.temporaryToggle(a);
         report(s,"EV Full Map requested; native markers not yet visually verified");
     }
+    static void nearby(Activity a){
+        if(a==null||a.isFinishing()||a.isDestroyed()||!a.hasWindowFocus()||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY))return;
+        NatV36Daily.Energy e=NatV36Daily.energy();
+        if(e==null||!Double.isFinite(e.speed)||e.speed<0||e.speed>1){toast(a,"ค้นหาสถานีเมื่อจอดรถและมีข้อมูลความเร็ว");return;}
+        View root=a.getWindow().peekDecorView();if(root==null)return;
+        State s=STATES.get(a);if(s==null){s=new State();STATES.put(a,s);}
+        Controls c=controls(root);layerEvidence(s,c);
+        if(c.results){toast(a,"ใช้รายการสถานีของ Maps ที่เปิดอยู่");return;}
+        View open=unique(c.open);
+        if(c.mapControls&&open!=null&&visible(open)&&open.isEnabled()&&open.performClick()){
+            s.opened=true;s.confirmed=false;s.openedAt=android.os.SystemClock.elapsedRealtime();report(s,"Native EV search requested by user; ranking supplied by Maps");return;
+        }
+        toast(a,"เปิดค้นหาใน Maps แล้วเลือกสถานีชาร์จ EV • ไม่พบปุ่มค้นหาที่รองรับ");
+        report(s,"Nearby charging: native category unavailable; no synthetic results");
+    }
+    private static TextView evKey(Activity a,State s,String description){
+        TextView t=toolbarButton(a,"⚡",description,()->layer(a,s));
+        t.setTooltipText(description+" • กดค้างค้นหาสถานีเมื่อจอด");
+        t.setOnLongClickListener(v->{nearby(a);return true;});return t;
+    }
     private static void act(Activity a,State state,boolean clean){
         if(a.isFinishing()||!a.hasWindowFocus()||!enabled(a)||!SafeMode.on(a,SafeMode.BYD_BATTERY))return;
         View root=a.getWindow().peekDecorView();if(root==null)return;
@@ -455,13 +475,13 @@ final class NatMinimalEv {
         if(bar==null||bar.getParent()!=host||state.vertical!=vertical||state.toolbarRoute!=routeControls||state.toolbarEv!=state.evMode||bar.getChildCount()!=chosen.count){
             remove(bar);bar=column(a);bar.setOrientation(vertical?1:0);bar.setElevation(dp(a,5));
             TextView[] keys;
-            if(state.evMode&&chosen.count==1)keys=new TextView[]{toolbarButton(a,"⚡","Exit EV Charging",()->layer(a,owner))};
+            if(state.evMode&&chosen.count==1)keys=new TextView[]{evKey(a,owner,"Exit EV Charging")};
             else if(chosen.count==1)keys=new TextView[]{diagnosticsButton(a,owner)};
-            else if(!routeControls&&chosen.count==4)keys=new TextView[]{diagnosticsButton(a,owner),splitButton(a),snowButton(a),toolbarButton(a,"⚡",state.evMode?"Exit EV Charging":"EV Charging Live Map",()->layer(a,owner))};
-            else if(chosen.count==3)keys=new TextView[]{diagnosticsButton(a,owner),splitButton(a),state.evMode?toolbarButton(a,"⚡","Exit EV Charging",()->layer(a,owner)):snowButton(a)};
-            else if(chosen.count==NatToolbarLayout.IDLE_SPLIT_COUNT)keys=new TextView[]{diagnosticsButton(a,owner),state.evMode?toolbarButton(a,"⚡","Exit EV Charging",()->layer(a,owner)):splitButton(a)};
+            else if(!routeControls&&chosen.count==4)keys=new TextView[]{diagnosticsButton(a,owner),splitButton(a),snowButton(a),evKey(a,owner,state.evMode?"Exit EV Charging":"EV Charging Live Map")};
+            else if(chosen.count==3)keys=new TextView[]{diagnosticsButton(a,owner),splitButton(a),state.evMode?evKey(a,owner,"Exit EV Charging"):snowButton(a)};
+            else if(chosen.count==NatToolbarLayout.IDLE_SPLIT_COUNT)keys=new TextView[]{diagnosticsButton(a,owner),state.evMode?evKey(a,owner,"Exit EV Charging"):splitButton(a)};
             else {
-                TextView[] original={toolbarButton(a,"⚡",state.evMode?"Exit EV Charging":"EV Charging Live Map",()->layer(a,owner)),toolbarButton(a,"◇","OverDrive",()->NatV36Shortcuts.control(a)),toolbarButton(a,"★","Favorite Destinations",()->NatFavorites.show(a)),toolbarButton(a,"⊘","Clean Mode",()->{act(a,owner,true);refresh(a,a.getWindow().peekDecorView());})};
+                TextView[] original={evKey(a,owner,state.evMode?"Exit EV Charging":"EV Charging Live Map"),toolbarButton(a,"◇","OverDrive",()->NatV36Shortcuts.control(a)),toolbarButton(a,"★","Favorite Destinations",()->NatFavorites.show(a)),toolbarButton(a,"⊘","Clean Mode",()->{act(a,owner,true);refresh(a,a.getWindow().peekDecorView());})};
                 keys=java.util.Arrays.copyOf(original,chosen.count);
                 if(NatToolbarLayout.hasDiagnostics(chosen.count))keys[NatToolbarLayout.diagnosticIndex(chosen.count)]=diagnosticsButton(a,owner);
                 if(NatToolbarLayout.splitIndex(chosen.count)>=0)keys[NatToolbarLayout.splitIndex(chosen.count)]=splitButton(a);

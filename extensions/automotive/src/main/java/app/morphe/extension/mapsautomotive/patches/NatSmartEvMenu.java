@@ -140,6 +140,7 @@ final class NatSmartEvMenu {
   if(valid&&route.charges==0&&route.google<reserve)line("คำแนะนำ: ตรวจสอบสถานีบน Native Maps ก่อนออกเดินทาง และเผื่อระยะสำรอง");
   line(NatMinimalEv.layerStatus(a));
   action("EV Charging Full Map • Native layer",()->closeThen(()->NatMinimalEv.splitAction(a,0)));
+  action("Nearby Charging • ค้นหาสถานีใน Maps",()->closeThen(()->NatMinimalEv.nearby(a)));
   action("ค้นหาสถานีชาร์จ (Maps) • ทางเลือกเดิม",()->closeThen(()->NatMinimalEv.splitAction(a,5)));
   action("แผนการชาร์จเดิม",()->closeThen(()->NatMinimalEv.splitAction(a,2)));
   action("‹ กลับเมนู",this::home);
@@ -151,6 +152,7 @@ final class NatSmartEvMenu {
  private void energy(){
   heading("Energy Intelligence");
   line(NatDrivePower.summary());
+  NatV33Telemetry.Slow avg=NatV33Telemetry.slow();metric("BMS Average • ประมาณ (ไม่ใช่ Live)",num(avg==null?Double.NaN:avg.kw,"kW"));
   NatV33Telemetry.Today t=NatV33Telemetry.today();boolean detail=t!=null&&t.detailPairs>0;
   double price=NatV33Telemetry.tariff(a),net=t==null?Double.NaN:t.kwh;
   double covered=detail?t.observedKm:Double.NaN,observed=detail?Math.max(0,t.observedNet):Double.NaN;

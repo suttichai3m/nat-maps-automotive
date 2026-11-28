@@ -54,7 +54,7 @@ final class NatSplitScreen {
  private static final class State {
   FrameLayout host;View nativeView;FrameLayout.LayoutParams original,applied;
   LinearLayout panel,footer,detailsBody;TextView driverSummary;Button evButton,smartButton;TextView soc,arrival,arrivalLabel,speed,power,remaining,rate,distance,eta,gps,byd,heading;
-  ImageView hero;TextView range,odo,acDriver,acPassenger,todayKm,todayEnergy,tariff,todayCost,dayNote,outside,battTemp,soh,tyresFront,tyresRear;LocationManager lm;LocationListener listener;
+  ImageView hero;FrameLayout heroFrame;LinearLayout zoomCard;TextView zoomTitle,zoomValue,zoomHint,zoomSource,zoomLabel;TextView todayDuration,todayRate,todayPerKm;TextView range,odo,acDriver,acPassenger,todayKm,todayEnergy,tariff,todayCost,dayNote,outside,battTemp,soh,tyresFront,tyresRear;LocationManager lm;LocationListener listener;
   WeakReference<View> blocked;int blockedW,blockedH;
   long bearingAt=-1,fixAt=-1,started,lastEvidence=-1,retryAt;
   double bearing=Double.NaN,turn=Double.NaN;
@@ -84,7 +84,7 @@ final class NatSplitScreen {
  }
  private static void removeUi(State s){
   NatV33Telemetry.stop();
-  remove(s.panel);remove(s.footer);s.panel=s.footer=s.detailsBody=null;s.hero=null;s.evButton=null;s.smartButton=null;s.driverSummary=null;
+  remove(s.panel);remove(s.footer);s.panel=s.footer=s.detailsBody=null;s.hero=null;s.heroFrame=null;s.zoomCard=null;s.zoomTitle=s.zoomValue=s.zoomHint=s.zoomSource=s.zoomLabel=null;s.todayDuration=s.todayRate=s.todayPerKm=null;s.evButton=null;s.smartButton=null;s.driverSummary=null;
   s.range=s.odo=s.acDriver=s.acPassenger=s.todayKm=s.todayEnergy=s.tariff=s.todayCost=s.dayNote=s.outside=s.battTemp=s.soh=s.tyresFront=s.tyresRear=null;
   s.soc=s.arrival=s.arrivalLabel=s.speed=s.power=s.remaining=s.rate=s.distance=s.eta=s.gps=s.byd=s.heading=null;
  }
@@ -192,7 +192,20 @@ final class NatSplitScreen {
   LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-1,1);lp.setMargins(dp(a,2),dp(a,2),dp(a,2),dp(a,2));row.addView(cell,lp);
   TextView label=text(a,name,battery?12:11,muted(s),false);label.setMaxLines(2);add(cell,label,-2);
   TextView value=text(a,"—",battery?30:17,accent,true);value.setSingleLine(true);value.setAutoSizeTextTypeUniformWithConfiguration(battery?24:12,battery?34:19,1,android.util.TypedValue.COMPLEX_UNIT_SP);
-  add(cell,value,-2);if(arrival)s.arrivalLabel=label;return value;
+  add(cell,value,-2);if(arrival)s.arrivalLabel=label;
+  cell.setClickable(true);cell.setFocusable(true);cell.setTooltipText("แตะเพื่อขยาย "+name);cell.setOnClickListener(v->zoom(a,s,label,value));return value;
+ }
+ private static void zoom(Activity a,State s,TextView label,TextView value){
+  if(!active(a)||s.zoomCard==null||!a.hasWindowFocus())return;
+  if(s.zoomSource==value){closeZoom(s);return;}
+  s.zoomLabel=label;s.zoomSource=value;s.hero.setVisibility(View.INVISIBLE);s.zoomCard.setVisibility(View.VISIBLE);refreshZoom(s);
+ }
+ private static void closeZoom(State s){s.zoomSource=s.zoomLabel=null;if(s.zoomCard!=null)s.zoomCard.setVisibility(View.GONE);if(s.hero!=null)s.hero.setVisibility(View.VISIBLE);}
+ private static void refreshZoom(State s){
+  if(s.zoomSource==null||s.zoomLabel==null||s.zoomCard==null)return;
+  if(!s.zoomSource.isShown()){closeZoom(s);return;}
+  set(s.zoomTitle,s.zoomLabel.getText().toString());set(s.zoomValue,s.zoomSource.getText().toString());s.zoomValue.setTextColor(s.zoomSource.getCurrentTextColor());
+  s.zoomCard.setContentDescription(s.zoomTitle.getText()+" "+s.zoomValue.getText()+" แตะเพื่อปิด");
  }
  private static Button action(Activity a,State s,LinearLayout parent,String name,int symbol,Runnable callback){
   Button b=new Button(a);b.setText(name);b.setAllCaps(false);b.setTextSize(13);b.setTextColor(fg(s));b.setGravity(Gravity.CENTER);b.setMinHeight(dp(a,48));b.setMinimumHeight(dp(a,48));
@@ -211,7 +224,14 @@ final class NatSplitScreen {
   s.hero=new ImageView(a);s.hero.setScaleType(ImageView.ScaleType.FIT_CENTER);
   s.hero.setContentDescription("BYD Seal blue, static studio image");s.hero.setImageBitmap(NatSealHero.bitmap());
   s.hero.setBackground(bg(a,0xff071522,0,8));s.hero.setClipToOutline(true);
-  int heroH=Math.min(dp(a,118),Math.max(dp(a,48),mapH/5));add(panel,s.hero,heroH);
+  int heroH=Math.min(dp(a,118),Math.max(dp(a,48),mapH/5));
+  s.heroFrame=new FrameLayout(a);add(panel,s.heroFrame,heroH);s.heroFrame.addView(s.hero,new FrameLayout.LayoutParams(-1,-1));
+  s.zoomCard=vertical(a);s.zoomCard.setGravity(Gravity.CENTER);s.zoomCard.setPadding(dp(a,6),dp(a,3),dp(a,6),dp(a,3));s.zoomCard.setBackground(bg(a,card(s),blue(s),10));
+  s.zoomTitle=text(a,"",16,fg(s),true);s.zoomTitle.setSingleLine(true);s.zoomTitle.setAutoSizeTextTypeUniformWithConfiguration(11,18,1,android.util.TypedValue.COMPLEX_UNIT_SP);add(s.zoomCard,s.zoomTitle,dp(a,23));
+  s.zoomValue=text(a,"—",48,fg(s),true);s.zoomValue.setMaxLines(2);s.zoomValue.setAutoSizeTextTypeUniformWithConfiguration(16,58,1,android.util.TypedValue.COMPLEX_UNIT_SP);s.zoomCard.addView(s.zoomValue,new LinearLayout.LayoutParams(-1,0,1));
+  s.zoomHint=text(a,"แตะเพื่อปิด ×",12,muted(s),false);add(s.zoomCard,s.zoomHint,dp(a,18));
+  s.heroFrame.addView(s.zoomCard,new FrameLayout.LayoutParams(-1,-1));s.zoomCard.setVisibility(View.GONE);s.zoomCard.setClickable(true);s.zoomCard.setFocusable(true);s.zoomCard.setOnClickListener(v->closeZoom(s));
+  
   s.heading=text(a,"—",11,muted(s),true);
   s.heading.setSingleLine(true);
   s.heading.setAutoSizeTextTypeUniformWithConfiguration(9,11,1,android.util.TypedValue.COMPLEX_UNIT_SP);
@@ -234,7 +254,9 @@ final class NatSplitScreen {
   add(body,text(a,"TODAY  •  สรุปการขับวันนี้",12,fg(s),true),dp(a,22));
   LinearLayout daily=row(a);daily.setTag("nat_custom_daily");add(body,daily,metricsH);s.todayKm=metric(a,s,daily,"ระยะทางวันนี้",fg(s),false,false);s.todayEnergy=metric(a,s,daily,"พลังงานสุทธิที่บันทึก",fg(s),false,false);
   LinearLayout costs=row(a);costs.setTag("nat_custom_cost");add(body,costs,metricsH);s.tariff=metric(a,s,costs,"ค่าไฟ / kWh  ⚙",blue(s),false,false);s.todayCost=metric(a,s,costs,"ค่าไฟวันนี้ (ประมาณ)",green(s),false,false);
-  View tariffCell=(View)s.tariff.getParent();tariffCell.setClickable(true);tariffCell.setFocusable(true);tariffCell.setContentDescription("ตั้งราคาค่าไฟต่อ kWh");tariffCell.setOnClickListener(v->editTariff(a,s));
+  View tariffCell=(View)s.tariff.getParent();tariffCell.setTooltipText("แตะขยาย • กดค้างเพื่อตั้งค่าไฟเมื่อจอด");tariffCell.setOnLongClickListener(v->{NatV33Telemetry.Fast f=NatV33Telemetry.fast();if(f!=null&&Double.isFinite(f.speed)&&f.speed<=1)editTariff(a,s);else Toast.makeText(a,"ตั้งค่าเมื่อจอดรถ",Toast.LENGTH_SHORT).show();return true;});
+  LinearLayout todayMore=row(a);todayMore.setTag("nat_custom_daily");add(body,todayMore,metricsH);s.todayDuration=metric(a,s,todayMore,"เวลาขับที่บันทึก",fg(s),false,false);s.todayRate=metric(a,s,todayMore,"สิ้นเปลืองช่วงที่วัด",fg(s),false,false);
+  LinearLayout perKm=row(a);perKm.setTag("nat_custom_cost");add(body,perKm,metricsH);s.todayPerKm=metric(a,s,perKm,"ค่าไฟช่วงที่วัด / km",green(s),false,false);
   s.dayNote=text(a,"ข้อมูลตามช่วงที่แอปบันทึก",10,muted(s),false);add(body,s.dayNote,dp(a,20));
   LinearLayout v1=row(a);v1.setTag("nat_custom_temperature");add(body,v1,metricsH);s.outside=metric(a,s,v1,"อุณหภูมิภายนอก",fg(s),false,false);s.battTemp=metric(a,s,v1,"อุณหภูมิแบตเฉลี่ย",fg(s),false,false);
   LinearLayout v2=row(a);v2.setTag("nat_custom_tyres");add(body,v2,metricsH);s.tyresFront=metric(a,s,v2,"ยางหน้า L / R (PSI)",fg(s),false,false);s.tyresRear=metric(a,s,v2,"ยางหลัง L / R (PSI)",fg(s),false,false);
@@ -247,6 +269,7 @@ final class NatSplitScreen {
   s.smartButton=action(a,s,footer,"Smart EV",6,()->NatSmartEvMenu.show(a));
   s.smartButton.setTooltipText("Smart EV • hold: Driver Mode");s.smartButton.setOnLongClickListener(v->{NatDriverWork.show(a);return true;});
   s.evButton=action(a,s,footer,"EV Charging",0,()->NatMinimalEv.splitAction(a,0));
+  s.evButton.setTextColor(green(s));s.evButton.setTooltipText("EV Charging • กดค้างเพื่อค้นหาสถานีใน Maps เมื่อจอด");s.evButton.setOnLongClickListener(v->{NatMinimalEv.nearby(a);return true;});
   action(a,s,footer,"OverDrive",7,()->NatV36Shortcuts.control(a));
   action(a,s,footer,"Favorites",2,()->NatFavorites.show(a));
   action(a,s,footer,"Clean",3,()->NatMinimalEv.splitAction(a,3));
@@ -317,23 +340,27 @@ final class NatSplitScreen {
   set(s.todayKm,fmt(t==null?Double.NaN:t.km,"km"));set(s.todayEnergy,fmt(t==null?Double.NaN:t.kwh,"kWh"));
   double cost=t==null?Double.NaN:NatDailyMath.cost(t.kwh,price);
   set(s.todayCost,Double.isFinite(cost)?String.format(Locale.US,"฿%.2f",cost):"—");
+  NatV36Daily.Summary times=NatV36Daily.read(a);set(s.todayDuration,times==null?"—":NatV36Daily.duration(times.moving));
+  double observed=t!=null&&t.detailPairs>0?Math.max(0,t.observedNet):Double.NaN,covered=t!=null&&t.detailPairs>0?t.observedKm:Double.NaN;
+  set(s.todayRate,fmt(NatDailyMath.forecastRate(observed,covered),"kWh/100km"));double per=NatDailyMath.perKm(NatDailyMath.cost(observed,price),covered);set(s.todayPerKm,Double.isFinite(per)?String.format(Locale.US,"฿%.2f/km",per):"—");
   set(s.dayNote,t==null?"รอข้อมูลวันนี้":"เฉพาะช่วงที่บันทึก • ไม่รวมการชาร์จ/ช่วงขาดข้อมูล");
  }
  static void refreshFast(Activity a){
   State s=states.get(a);if(s==null||!active(a)||!a.hasWindowFocus()||!BydBatteryPatch.isActive())return;
   NatV33Telemetry.request();NatV33Telemetry.Fast f=NatV33Telemetry.fast();
   updatePower(s);
-  if(f==null)return;
+  if(f==null){refreshZoom(s);return;}
   Integer soc=NatSplitMath.current(f.soc);if(soc!=null)set(s.soc,NatSplitMath.percent(soc));
   if(Double.isFinite(f.speed))set(s.speed,fmt(f.speed,"km/h"));
+  refreshZoom(s);
  }
+ private static void metricLabel(TextView value,String label){if(value!=null&&value.getParent() instanceof LinearLayout){View v=((LinearLayout)value.getParent()).getChildAt(0);if(v instanceof TextView)set((TextView)v,label);}}
  private static void updatePower(State s){
   if(s.power==null)return;
   NatDrivePower.Reading direct=BydBatteryPatch.isActive()?NatDrivePower.fresh():null;
-  NatV33Telemetry.Slow slow=BydBatteryPatch.isActive()?NatV33Telemetry.slow():null;
-  double kw=direct!=null?direct.kw:slow==null?Double.NaN:slow.kw;
-  String label=direct!=null?NatDrivePowerRules.label(kw,direct.speed):Double.isFinite(kw)?"BMS AVG (ประมาณ)":"POWER / REGEN";
-  set(s.power,Double.isFinite(kw)?String.format(Locale.US,kw==0?"%.0f kW":"%+.1f kW",kw):"—");
+  double kw=direct!=null?direct.kw:Double.NaN;
+  String label=direct!=null?NatDrivePowerRules.label(kw,direct.speed):"POWER / REGEN • ไม่มีข้อมูล";
+  set(s.power,Double.isFinite(kw)?String.format(Locale.US,kw==0?"%.0f kW":"%+.0f kW",kw):"—");
   if(s.power.getParent() instanceof LinearLayout){View v=((LinearLayout)s.power.getParent()).getChildAt(0);if(v instanceof TextView)set((TextView)v,label);}
   s.power.setTextColor(direct!=null&&NatDrivePowerRules.regen(kw,direct.speed)?green(s):direct!=null&&kw>0?blue(s):fg(s));
  }
@@ -378,8 +405,18 @@ final class NatSplitScreen {
    }
   }catch(Exception ignored){}
   set(s.battTemp,temp);set(s.soh,health);updateDaily(a,s);
-  set(s.remaining,fmt(match?f.remainingKwh:Double.NaN,"kWh"));
-  set(s.rate,fmt(match?NatDailyMath.forecastRate(f.remainingKwh,f.km):Double.NaN,"kWh/100km"));
+  boolean finalMatch=route!=null&&!route.held&&f!=null&&NatStabilityMath.matches(route.soc,route.km,f.google,f.km);
+  double energy=finalMatch&&Double.isFinite(f.remainingKwh)&&f.remainingKwh>=0?f.remainingKwh:Double.NaN;
+  boolean estimated=false;
+  if(!Double.isFinite(energy)&&route!=null&&!route.held&&f!=null&&f.charges==0){
+   // Same destination evidence, fresh no-charge snapshot and live SOC only; never estimate from a next charging stop.
+   double freshSoc=fast!=null?fast.soc:live.soc;
+   energy=NatReadableRules.estimate(f.soc,f.google,f.km,f.capacity,route.soc,route.km,freshSoc);
+   estimated=Double.isFinite(energy);
+  }
+  set(s.remaining,fmt(energy,"kWh"));set(s.rate,fmt(NatDailyMath.forecastRate(energy,route==null?Double.NaN:route.km),"kWh/100km"));
+  metricLabel(s.remaining,estimated?"พลังงานที่ต้องใช้อีก (ประมาณ)":"พลังงานที่ต้องใช้อีก (Maps)");
+  metricLabel(s.rate,estimated?"สิ้นเปลืองคาดการณ์ (ประมาณ)":"สิ้นเปลืองคาดการณ์ (Maps)");
   set(s.distance,fmt(route==null?Double.NaN:route.km,"km"));
   String eta=route==null?null:route.eta;set(s.eta,eta==null?"—":eta);
   String gps;
@@ -390,7 +427,7 @@ final class NatSplitScreen {
   String byd="—";try{org.json.JSONObject v=BydBatteryPatch.diagnosticSnapshot();String state=v.optString("status","unknown");byd="fresh".equals(state)?"Fresh":state.equals("inactive")?"Inactive":"No fresh data";}catch(Exception ignored){}
   NatReadOnlyVehicle.Values vehicle=NatReadOnlyVehicle.read();if(vehicle!=null&&!vehicle.gear.equals("—"))byd+=" • "+vehicle.gear;
   set(s.byd,byd);s.byd.setTextColor(byd.startsWith("Fresh")?green(s):muted(s));
-  applyCustom(a,s);
+  applyCustom(a,s);refreshZoom(s);
 
  }
  private static final class Icon extends Drawable {
